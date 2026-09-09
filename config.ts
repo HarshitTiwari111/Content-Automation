@@ -62,6 +62,13 @@ export const config = {
     maxCriteria: 30,
     minWords: 2,
     maxWords: 8,
+    /**
+     * Article ke shabdon ke aage lagne wale shabd (best running shoes).
+     * Khaali kar do to sirf article ke apne shabdon se keywords banenge.
+     */
+    prefixes: ['best', 'top'],
+    /** Article ke shabdon ke peeche lagne wale shabd (running shoes guide). */
+    modifiers: ['guide', 'tips', 'checklist', 'ideas', 'options', 'comparison'],
     /** A keyword containing any of these words is dropped. */
     bannedWords: [
       'free',

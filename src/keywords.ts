@@ -8,10 +8,6 @@ const STOPWORDS = new Set([
   'about', 'into', 'over', 'after', 'before', 'more', 'most', 'can', 'will', 'do', 'does',
 ]);
 
-/** Suffix ideas that keep the search intent informational and policy-safe. */
-const MODIFIERS = ['guide', 'tips', 'checklist', 'ideas', 'options', 'comparison'];
-const PREFIXES = ['best', 'top'];
-
 /** lowercase, strip punctuation, collapse spaces. */
 function clean(text: string): string {
   return text
@@ -59,6 +55,9 @@ function isAllowed(keyword: string, own: Set<string>): boolean {
  */
 export function generateKeywordTexts(row: ArticleRow): string[] {
   const own = ownWords(row);
+  // Jodne wale shabd config.ts me hain, code me nahi.
+  const PREFIXES: readonly string[] = config.keywords.prefixes;
+  const MODIFIERS: readonly string[] = config.keywords.modifiers;
   const titleCore = coreWords(row.title || row.topic);
   const topicCore = coreWords(row.topic);
   const brand = clean(row.brand);
