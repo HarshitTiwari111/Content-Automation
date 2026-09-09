@@ -1,0 +1,27 @@
+{
+  "name": "content-automation-search-ads",
+  "version": "0.1.0",
+  "private": true,
+  "description": "Phase 5 - Google Search Ads automation: Sheet (Search=YES) -> keywords + RSA -> PAUSED Search campaign -> campaign ID back to Sheet",
+  "type": "module",
+  "engines": {
+    "node": ">=20.0.0"
+  },
+  "scripts": {
+    "create": "tsx src/run.ts",
+    "dry": "tsx src/run.ts --dry",
+    "typecheck": "tsc --noEmit",
+    "preview": "tsx scripts/preview.ts",
+    "check": "tsx scripts/check-ads.ts",
+    "serve": "tsx scripts/serve.ts"
+  },
+  "dependencies": {
+    "dotenv": "16.4.7",
+    "googleapis": "144.0.0"
+  },
+  "devDependencies": {
+    "@types/node": "22.10.5",
+    "tsx": "4.19.2",
+    "typescript": "5.7.3"
+  }
+}
