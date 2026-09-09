@@ -66,16 +66,22 @@ function findTemplate(
   row: ArticleRow,
   templates: Map<string, CampaignTemplate>,
 ): CampaignTemplate | undefined {
-  if (!row.template) return undefined;
+  // Row me Template likha ho to wahi, warna config wala default template.
+  const wanted = row.template || config.defaultTemplate;
+  if (!wanted) return undefined;
 
-  const key = row.template.trim().toLowerCase().replace(/\s+/g, ' ');
+  const key = wanted.trim().toLowerCase().replace(/\s+/g, ' ');
   const found = templates.get(key);
 
   if (!found) {
-    logger.warn(
-      `Template "${row.template}" ${config.campaignTemplates.tab} me nahi mila — ` +
-        'config ke defaults use ho rahe hain.',
-    );
+    // Row me naam likha tha par mila nahi — ye batana zaroori hai.
+    // Default template na mile to chup rehna theek hai (shayad tab hi khaali hai).
+    if (row.template) {
+      logger.warn(
+        `Template "${row.template}" ${config.campaignTemplates.tab} me nahi mila — ` +
+          'config ke defaults use ho rahe hain.',
+      );
+    }
     return undefined;
   }
 

@@ -108,7 +108,9 @@ export const config = {
   utmSuffix: 'utm_source=google&utm_medium=cpc&utm_campaign={article_id}',
   /** SITE | ARTICLE_ID | CHANNEL | GEO | TEMPLATE */
   campaignNamePattern: '{site} | {article_id} | SEARCH | {geo} | {template}',
-  defaultTemplate: 'DEFAULT',
+  /** Jis row me Template column/value na ho, uske liye yahi template use hoga.
+   *  CAMPAIGN_TEMPLATES tab me isi naam ki row honi chahiye. */
+  defaultTemplate: 'TEST20',
 
   /** Sheet ------------------------------------------------------------------ */
   sheet: {
