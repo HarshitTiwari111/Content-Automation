@@ -152,6 +152,23 @@ export const config = {
   },
 
   /**
+   * ERROR_LOG tab — PDF section 13: "Failed API calls, validation failures
+   * and retry status". Har fail hui row ka record yahan jaata hai.
+   */
+  errorLog: {
+    tab: 'ERROR_LOG',
+    /** Component column me yahi likha jaata hai. */
+    component: 'Ads',
+    columns: {
+      timestamp: ['TimeStamp', 'Timestamp', 'Time', 'Date'],
+      articleId: ['Article ID', 'ArticleID', 'Article Id'],
+      component: ['Component (Ads/Publishing/Traffic)', 'Component'],
+      message: ['Error Message', 'Error', 'Message'],
+      retryStatus: ['Retry Status', 'Retry', 'Status'],
+    } as Record<string, string[]>,
+  },
+
+  /**
    * CAMPAIGN_TEMPLATES tab — har template ke rules.
    * CONTENT_QUEUE ki row ka Template naam yahan match hota hai, aur budget cap,
    * max bid aur allowed GEO wahan se aate hain (config ke bajaye).

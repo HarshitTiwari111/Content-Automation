@@ -393,6 +393,76 @@ export async function readCreatedCampaigns(): Promise<Map<string, string>> {
 }
 
 /**
+ * Live chalane se PEHLE check karta hai ki CONTENT_QUEUE me campaign ID
+ * likhne ki jagah hai ya nahi. Warna campaign ban jayegi aur uska ID kahin
+ * likha nahi jayega — agli run duplicate bana degi.
+ */
+export function assertContentQueueWritable(): void {
+  if (columnIndex('searchCampaignId') === -1) {
+    const name = (config.sheet.columns.searchCampaignId ?? ['Search Campaign ID'])[0];
+    throw new Error(
+      `${env.sheetTab} ki row 1 me "${name}" column add karo. ` +
+        'Iske bina campaign ka ID likha nahi ja sakta (aur duplicate ban sakti hai).',
+    );
+  }
+}
+
+/**
+ * ERROR_LOG tab me ek row jodta hai. Tab ya columns na hon to chup-chaap
+ * chhod deta hai — error likhne ki koshish me asli kaam nahi rukna chahiye.
+ */
+export async function appendErrorLog(entry: {
+  articleId: string;
+  message: string;
+  retryStatus: string;
+}): Promise<boolean> {
+  const sheets = getClient();
+
+  let logHeaders: string[] = [];
+  try {
+    const response = await withRetry(`${config.errorLog.tab} padhna`, () =>
+      sheets.spreadsheets.values.get({
+        spreadsheetId: env.sheetId,
+        range: `${config.errorLog.tab}!A1:Z1`,
+      }),
+    );
+    logHeaders = (response.data.values?.[0] ?? []).map((h) => (h ?? '').toString());
+  } catch {
+    return false; // Tab hi nahi hai.
+  }
+
+  if (logHeaders.length === 0) return false;
+
+  const at = (field: string): number => {
+    const aliases = config.errorLog.columns[field] ?? [];
+    return logHeaders.findIndex((header) => aliases.some((a) => normalise(a) === normalise(header)));
+  };
+
+  const values: string[] = new Array(logHeaders.length).fill('');
+  const put = (field: string, value: string): void => {
+    const i = at(field);
+    if (i !== -1) values[i] = value;
+  };
+  put('timestamp', new Date().toISOString());
+  put('articleId', entry.articleId);
+  put('component', config.errorLog.component);
+  put('message', entry.message);
+  put('retryStatus', entry.retryStatus);
+
+  await withRetry(`${config.errorLog.tab} me likhna`, () =>
+    sheets.spreadsheets.values.append({
+      spreadsheetId: env.sheetId,
+      range: `${config.errorLog.tab}!A1`,
+      valueInputOption: 'RAW',
+      insertDataOption: 'INSERT_ROWS',
+      requestBody: { values: [values] },
+    }),
+  );
+
+  return true;
+}
+
+/**
  * Live chalane se PEHLE check karta hai ki record likha ja sakega ya nahi.
  * Warna campaign ban jayegi lekin uska ID kahin likha nahi jayega — aur
  * agli run wahi campaign dobara bana degi.

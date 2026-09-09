@@ -5,8 +5,8 @@ import { createSearchCampaign, describeAdsError, PartialCampaignError } from './
 import { logger } from './logger.js';
 import { buildPlan } from './plan.js';
 import {
-  appendCampaignRecord,
-  assertAccountMapWritable,
+  appendErrorLog,
+  assertContentQueueWritable,
   readAccountMap,
   readSiteIds,
   readCampaignTemplates,
@@ -14,6 +14,7 @@ import {
   readRows,
   selectEligible,
   siteKey,
+  writeBack,
 } from './sheet.js';
 import type { ArticleRow, CampaignPlan, CampaignTemplate, RowOutcome } from './types.js';
 
@@ -140,15 +141,13 @@ async function processRow(
     const result = await createSearchCampaign(plan);
 
     if (!env.dryRun) {
-      await appendCampaignRecord({
-        siteId: resolvedSiteId ?? row.siteId ?? row.website,
-        customerId,
-        articleId: row.articleId,
+      // PDF section 13: Search Campaign ID CONTENT_QUEUE ki usi row me jata hai.
+      await writeBack(row.rowNumber, {
         searchCampaignId: result.campaignId,
         status: 'CAMPAIGN_CREATED',
         notes: '',
       });
-      logger.step(`📄 ${config.accountMap.tab} me campaign ID likh diya`);
+      logger.step(`📄 ${env.sheetTab} row ${row.rowNumber} me campaign ID likh diya`);
     }
 
     return { articleId: row.articleId, ok: true, campaignId: result.campaignId };
@@ -165,14 +164,20 @@ async function processRow(
 
     if (!env.dryRun) {
       try {
-        await appendCampaignRecord({
-          siteId: resolvedSiteId ?? row.siteId ?? row.website,
-          customerId: resolveCustomerId(row, accountMap, resolvedSiteId),
-          articleId: row.articleId,
-          searchCampaignId: partialId ?? '',
+        // Row me status/notes (jitne column maujood hain), aur poora record
+        // ERROR_LOG tab me — PDF section 13.
+        await writeBack(row.rowNumber, {
+          ...(partialId ? { searchCampaignId: partialId } : {}),
           status: 'ERROR',
           notes: reason.slice(0, 500),
         });
+
+        const logged = await appendErrorLog({
+          articleId: row.articleId,
+          message: reason.slice(0, 500),
+          retryStatus: partialId ? 'PARTIAL — campaign bani, aage fail' : 'PENDING',
+        });
+        if (logged) logger.step(`📄 ${config.errorLog.tab} me error likh diya`);
       } catch (writeError) {
         logger.error(`Sheet me error likhne me bhi problem: ${(writeError as Error).message}`);
       }
@@ -209,8 +214,8 @@ async function main(): Promise<void> {
 
   // Live me campaign banane se pehle pakka karo ki uska record likha ja sakega.
   if (!env.dryRun) {
-    await assertAccountMapWritable();
-    logger.info(`✅ ${config.accountMap.tab} likhne ke liye taiyar hai`);
+    assertContentQueueWritable();
+    logger.info(`✅ ${env.sheetTab} me campaign ID likhne ki jagah hai`);
   }
 
   const createdCampaigns = await readCreatedCampaigns();
