@@ -59,20 +59,41 @@ export function networkErrorDetail(error: unknown): string {
   return parts.filter(Boolean).join(' — ');
 }
 
-/** Google Ads REST error body se padhne layak message nikalta hai. */
+interface GoogleAdsError {
+  message?: string;
+  errorCode?: Record<string, string>;
+  trigger?: { stringValue?: string };
+  location?: { fieldPathElements?: Array<{ fieldName?: string; index?: number }> };
+}
+
+/**
+ * Google Ads REST error body se padhne layak message nikalta hai.
+ * "The required field was not present." jaisa message akela bekaar hai —
+ * isliye field ka path aur error code bhi saath me dikhate hain.
+ */
 function extractApiError(status: number, body: string): string {
   try {
     const parsed = JSON.parse(body) as {
-      error?: {
-        message?: string;
-        details?: Array<{ errors?: Array<{ message?: string }> }>;
-      };
+      error?: { message?: string; details?: Array<{ errors?: GoogleAdsError[] }> };
     };
 
     const detailed = (parsed.error?.details ?? [])
       .flatMap((detail) => detail.errors ?? [])
-      .map((e) => e.message)
-      .filter((m): m is string => Boolean(m));
+      .map((e) => {
+        const parts: string[] = [e.message ?? ''];
+
+        const path = (e.location?.fieldPathElements ?? [])
+          .map((el) => el.fieldName)
+          .filter(Boolean)
+          .join('.');
+        if (path) parts.push(`field: ${path}`);
+
+        const code = Object.values(e.errorCode ?? {}).join(',');
+        if (code) parts.push(`code: ${code}`);
+
+        return parts.filter(Boolean).join(' — ');
+      })
+      .filter(Boolean);
 
     if (detailed.length > 0) return detailed.join(' | ');
     if (parsed.error?.message) return parsed.error.message;
@@ -226,6 +247,10 @@ export async function createSearchCampaign(plan: CampaignPlan): Promise<Campaign
           // startDate jaanbujh ke nahi bhej rahe — is API version me wo field
           // nahi hai, aur na dene par Google aaj ki date khud laga deta hai.
           finalUrlSuffix: plan.finalUrlSuffix,
+          // Google ab har campaign pe ye declaration maangta hai.
+          // Ye content articles hain, EU political advertising nahi —
+          // agar kabhi political ads chalayein to ye badalna ZAROORI hai.
+          containsEuPoliticalAdvertising: 'DOES_NOT_CONTAIN_EU_POLITICAL_ADVERTISING',
         },
       },
     ],
