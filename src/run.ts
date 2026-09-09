@@ -9,12 +9,13 @@ import {
   assertAccountMapWritable,
   readAccountMap,
   readSiteIds,
+  readCampaignTemplates,
   readCreatedCampaigns,
   readRows,
   selectEligible,
   siteKey,
 } from './sheet.js';
-import type { ArticleRow, CampaignPlan, RowOutcome } from './types.js';
+import type { ArticleRow, CampaignPlan, CampaignTemplate, RowOutcome } from './types.js';
 
 /**
  * Kuch ISP connections pe IPv6 lad-khadata hai aur "getaddrinfo ENOTFOUND"
@@ -56,16 +57,59 @@ function resolveSiteId(row: ArticleRow, siteIds: Map<string, string>): string | 
   );
 }
 
+/**
+ * Row ke Template naam se CAMPAIGN_TEMPLATES wali row dhoondhta hai.
+ * Naam likha ho par template na mile to chetavni deta hai — chup-chaap
+ * config ke defaults pe chale jaana galat hoga.
+ */
+function findTemplate(
+  row: ArticleRow,
+  templates: Map<string, CampaignTemplate>,
+): CampaignTemplate | undefined {
+  if (!row.template) return undefined;
+
+  const key = row.template.trim().toLowerCase().replace(/\s+/g, ' ');
+  const found = templates.get(key);
+
+  if (!found) {
+    logger.warn(
+      `Template "${row.template}" ${config.campaignTemplates.tab} me nahi mila — ` +
+        'config ke defaults use ho rahe hain.',
+    );
+    return undefined;
+  }
+
+  // Default Status kuch bhi ho, campaign PAUSED hi banegi — ye niyam badal
+  // nahi sakta. Lekin agar template kuch aur kehta hai to bata dena chahiye.
+  const status = found.defaultStatus.trim().toUpperCase();
+  if (status && status !== 'PAUSED') {
+    logger.warn(
+      `Template "${found.name}" ka Default Status "${found.defaultStatus}" hai, ` +
+        'lekin campaign phir bhi PAUSED hi banegi (ye rule code me fix hai).',
+    );
+  }
+  if (found.device) {
+    logger.warn(
+      `Template "${found.name}" me Device "${found.device}" likha hai — ` +
+        'device targeting abhi apply nahi hoti.',
+    );
+  }
+
+  return found;
+}
+
 async function processRow(
   row: ArticleRow,
   accountMap: Map<string, string>,
   siteIds: Map<string, string>,
+  templates: Map<string, CampaignTemplate>,
 ): Promise<RowOutcome> {
   logger.blank();
   logger.info(`▶ ${row.articleId} — "${row.title || row.topic}" (row ${row.rowNumber})`);
 
   // try ke bahar, taaki error hone par bhi record me likh sakein.
   const resolvedSiteId = resolveSiteId(row, siteIds);
+  const template = findTemplate(row, templates);
 
   try {
     let customerId = resolveCustomerId(row, accountMap, resolvedSiteId);
@@ -82,8 +126,8 @@ async function processRow(
       customerId = 'DRY-RUN-NO-ACCOUNT';
     }
 
-    const plan = await buildPlan(row, customerId, resolvedSiteId);
-    logger.step(`🏢 Site: ${resolvedSiteId ?? "(WEBSITE_CONFIG me nahi mila)"}  |  Google Ads account: ${customerId}`);
+    const plan = await buildPlan(row, customerId, resolvedSiteId, template);
+    logger.step(`🏢 Site: ${resolvedSiteId ?? "(WEBSITE_CONFIG me nahi mila)"}  |  Account: ${customerId}  |  Template: ${template?.name ?? "(koi nahi)"}`);
     logger.step(`✅ URL check OK, budget ${plan.dailyBudget}/day, GEO ${plan.geo}`);
     printPlanPreview(plan);
 
@@ -144,6 +188,9 @@ async function main(): Promise<void> {
   const allRows = await readRows();
   logger.info(`📄 ${env.sheetTab} padhi — ${allRows.length} rows`);
 
+  const templates = await readCampaignTemplates();
+  logger.info(`📋 ${config.campaignTemplates.tab} — ${templates.size} template mile`);
+
   const siteIds = await readSiteIds();
   logger.info(`🌐 ${config.websiteConfig.tab} — ${siteIds.size} site codes mile`);
 
@@ -187,7 +234,7 @@ async function main(): Promise<void> {
 
   const outcomes: RowOutcome[] = [];
   for (const row of eligible) {
-    outcomes.push(await processRow(row, accountMap, siteIds));
+    outcomes.push(await processRow(row, accountMap, siteIds, templates));
   }
 
   const ok = outcomes.filter((o) => o.ok);

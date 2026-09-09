@@ -20,6 +20,19 @@ export interface ArticleRow {
   notes: string;
 }
 
+/** CAMPAIGN_TEMPLATES tab ki ek row. */
+export interface CampaignTemplate {
+  name: string;
+  /** Khaali ho to config.allowedGeos chalti hai. */
+  allowedGeos: string[];
+  device: string;
+  /** Khaali ho to config.budget.maxDailyBudget chalti hai. */
+  dailyBudgetCap?: number;
+  /** Khaali ho to config.defaultCpcBid chalti hai. */
+  maxBid?: number;
+  defaultStatus: string;
+}
+
 /** Keyword criterion to create in the ad group. */
 export interface KeywordCriterion {
   text: string;

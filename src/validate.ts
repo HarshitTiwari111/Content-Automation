@@ -1,6 +1,6 @@
 import { config } from '../config.js';
 import { withRetry } from './retry.js';
-import type { ArticleRow } from './types.js';
+import type { ArticleRow, CampaignTemplate } from './types.js';
 
 /** Every field the campaign builder cannot work without. */
 export function assertRequiredFields(row: ArticleRow): void {
@@ -59,29 +59,44 @@ export async function assertUrlReachable(row: ArticleRow): Promise<void> {
   }
 }
 
-/** Row budget, falling back to the default and capped by the safety limit. */
-export function resolveBudget(row: ArticleRow): number {
+/**
+ * Row budget, capped by the template's Daily Budget Cap.
+ * Template na mile to config wali limit chalti hai.
+ */
+export function resolveBudget(row: ArticleRow, template?: CampaignTemplate): number {
   const raw = row.budget.replace(/[^0-9.]/g, '');
   const value = raw ? Number(raw) : config.budget.defaultDailyBudget;
 
   if (!Number.isFinite(value) || value <= 0) {
     throw new Error(`Budget value galat hai: "${row.budget}"`);
   }
-  if (value > config.budget.maxDailyBudget) {
-    throw new Error(
-      `Budget ${value} limit ${config.budget.maxDailyBudget} se zyada hai (config.ts me cap set hai).`,
-    );
+
+  const cap = template?.dailyBudgetCap ?? config.budget.maxDailyBudget;
+  const capSource = template?.dailyBudgetCap
+    ? `${config.campaignTemplates.tab} ke "${template.name}" template ka Daily Budget Cap`
+    : 'config.ts ka maxDailyBudget';
+
+  if (value > cap) {
+    throw new Error(`Budget ${value} limit ${cap} se zyada hai (${capSource}).`);
   }
   return value;
 }
 
-/** GEO code from the row, checked against the allowed list. */
-export function resolveGeo(row: ArticleRow): { geo: string; geoTargetId: number } {
+/** GEO code from the row, checked against the template's (or config's) allowed list. */
+export function resolveGeo(
+  row: ArticleRow,
+  template?: CampaignTemplate,
+): { geo: string; geoTargetId: number } {
   const geo = (row.geo || config.defaultGeo).trim().toUpperCase();
 
-  const allowed: readonly string[] = config.allowedGeos;
+  const fromTemplate = template?.allowedGeos ?? [];
+  const allowed: readonly string[] = fromTemplate.length > 0 ? fromTemplate : config.allowedGeos;
   if (!allowed.includes(geo)) {
-    throw new Error(`GEO "${geo}" allowed list me nahi hai (config.ts -> allowedGeos).`);
+    const where =
+      fromTemplate.length > 0
+        ? `"${template?.name}" template ke Allowed GEOs`
+        : 'config.ts -> allowedGeos';
+    throw new Error(`GEO "${geo}" allowed list me nahi hai (${where}).`);
   }
   const geoTargetId = config.geoTargetIds[geo];
   if (!geoTargetId) {

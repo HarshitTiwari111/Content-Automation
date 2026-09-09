@@ -1,7 +1,7 @@
 import { config } from '../config.js';
 import { buildAdCopy } from './adcopy.js';
 import { buildKeywords } from './keywords.js';
-import type { ArticleRow, CampaignPlan } from './types.js';
+import type { ArticleRow, CampaignPlan, CampaignTemplate } from './types.js';
 import {
   assertRequiredFields,
   assertUrlReachable,
@@ -38,11 +38,12 @@ export async function buildPlan(
   row: ArticleRow,
   customerId: string,
   resolvedSiteId?: string,
+  template?: CampaignTemplate,
 ): Promise<CampaignPlan> {
   assertRequiredFields(row);
 
-  const dailyBudget = resolveBudget(row);
-  const { geo, geoTargetId } = resolveGeo(row);
+  const dailyBudget = resolveBudget(row, template);
+  const { geo, geoTargetId } = resolveGeo(row, template);
   const languageId = resolveLanguageId();
 
   await assertUrlReachable(row);
@@ -55,7 +56,7 @@ export async function buildPlan(
     customerId,
     campaignName: campaignName(row, geo, resolvedSiteId),
     dailyBudget,
-    cpcBid: config.defaultCpcBid,
+    cpcBid: template?.maxBid ?? config.defaultCpcBid,
     geo,
     geoTargetId,
     languageId,

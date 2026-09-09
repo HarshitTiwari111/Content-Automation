@@ -143,6 +143,23 @@ export const config = {
   },
 
   /**
+   * CAMPAIGN_TEMPLATES tab — har template ke rules.
+   * CONTENT_QUEUE ki row ka Template naam yahan match hota hai, aur budget cap,
+   * max bid aur allowed GEO wahan se aate hain (config ke bajaye).
+   */
+  campaignTemplates: {
+    tab: 'CAMPAIGN_TEMPLATES',
+    columns: {
+      name: ['Template Name', 'Template', 'Name'],
+      allowedGeos: ['Allowed GEOs', 'Allowed GEO', 'GEOs', 'GEO'],
+      device: ['Device', 'Devices'],
+      dailyBudgetCap: ['Daily Budget Cap', 'Budget Cap', 'Daily Budget'],
+      maxBid: ['Max Bid', 'Max CPC', 'Bid'],
+      defaultStatus: ['Default Status', 'Status'],
+    } as Record<string, string[]>,
+  },
+
+  /**
    * WEBSITE_CONFIG tab — domain se site ka chhota code (SITE-1, SITE-4...).
    * Campaign ke naam me yahi code aata hai, poora domain nahi.
    */

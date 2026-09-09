@@ -4,7 +4,7 @@ import { google, type sheets_v4 } from 'googleapis';
 import { config } from '../config.js';
 import { env } from './env.js';
 import { withRetry } from './retry.js';
-import type { ArticleRow } from './types.js';
+import type { ArticleRow, CampaignTemplate } from './types.js';
 
 const SCOPES = ['https://www.googleapis.com/auth/spreadsheets'];
 const READ_RANGE_END = 'BZ';
@@ -205,6 +205,69 @@ export function siteKey(value: string): string {
     .replace(/^https?:\/\//, '')
     .replace(/^www\./, '');
   return (cleaned.split('/')[0] ?? '').trim();
+}
+
+function toNumber(value: string): number | undefined {
+  const cleaned = value.replace(/[^0-9.]/g, '');
+  if (!cleaned) return undefined;
+  const n = Number(cleaned);
+  return Number.isFinite(n) && n > 0 ? n : undefined;
+}
+
+/**
+ * CAMPAIGN_TEMPLATES tab: Template Name -> uske rules.
+ * Budget cap, max bid aur allowed GEO yahin se aate hain — config sirf
+ * fallback hai jab template na mile.
+ */
+export async function readCampaignTemplates(): Promise<Map<string, CampaignTemplate>> {
+  const sheets = getClient();
+  const map = new Map<string, CampaignTemplate>();
+
+  let values: string[][] = [];
+  try {
+    const response = await withRetry(`${config.campaignTemplates.tab} padhna`, () =>
+      sheets.spreadsheets.values.get({
+        spreadsheetId: env.sheetId,
+        range: `${config.campaignTemplates.tab}!A1:Z`,
+        valueRenderOption: 'UNFORMATTED_VALUE',
+      }),
+    );
+    values = (response.data.values ?? []) as string[][];
+  } catch {
+    return map; // Tab nahi hai — config ke defaults chalenge.
+  }
+
+  if (values.length < 2) return map;
+
+  const tplHeaders = (values[0] ?? []).map((h) => (h ?? '').toString());
+  const at = (field: string): number => {
+    const aliases = config.campaignTemplates.columns[field] ?? [];
+    return tplHeaders.findIndex((header) => aliases.some((a) => normalise(a) === normalise(header)));
+  };
+  const cellOf = (row: string[], field: string): string => {
+    const i = at(field);
+    return i === -1 ? '' : (row[i] ?? '').toString().trim();
+  };
+
+  for (let i = 1; i < values.length; i += 1) {
+    const raw = (values[i] ?? []) as string[];
+    const name = cellOf(raw, 'name');
+    if (!name) continue;
+
+    map.set(normalise(name), {
+      name,
+      allowedGeos: cellOf(raw, 'allowedGeos')
+        .split(/[,/|]/)
+        .map((g) => g.trim().toUpperCase())
+        .filter(Boolean),
+      device: cellOf(raw, 'device'),
+      dailyBudgetCap: toNumber(cellOf(raw, 'dailyBudgetCap')),
+      maxBid: toNumber(cellOf(raw, 'maxBid')),
+      defaultStatus: cellOf(raw, 'defaultStatus'),
+    });
+  }
+
+  return map;
 }
 
 /**
