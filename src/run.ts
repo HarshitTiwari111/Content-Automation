@@ -6,6 +6,7 @@ import { logger } from './logger.js';
 import { buildPlan } from './plan.js';
 import {
   appendCampaignRecord,
+  assertAccountMapWritable,
   readAccountMap,
   readCreatedCampaigns,
   readRows,
@@ -128,6 +129,12 @@ async function main(): Promise<void> {
       ? `🏢 ${config.accountMap.tab} — ${accountMap.size} site→account mapping mili`
       : `🏢 ${config.accountMap.tab} khaali hai — .env wali GOOGLE_ADS_CUSTOMER_ID use hogi`,
   );
+
+  // Live me campaign banane se pehle pakka karo ki uska record likha ja sakega.
+  if (!env.dryRun) {
+    await assertAccountMapWritable();
+    logger.info(`✅ ${config.accountMap.tab} likhne ke liye taiyar hai`);
+  }
 
   const createdCampaigns = await readCreatedCampaigns();
   if (createdCampaigns.size > 0) {

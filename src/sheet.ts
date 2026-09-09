@@ -287,6 +287,31 @@ export async function readCreatedCampaigns(): Promise<Map<string, string>> {
   return created;
 }
 
+/**
+ * Live chalane se PEHLE check karta hai ki record likha ja sakega ya nahi.
+ * Warna campaign ban jayegi lekin uska ID kahin likha nahi jayega — aur
+ * agli run wahi campaign dobara bana degi.
+ */
+export async function assertAccountMapWritable(): Promise<void> {
+  const data = await readAccountMapTab();
+  if (!data) {
+    throw new Error(
+      `${config.accountMap.tab} tab nahi mila. Sheet me wo tab banao, ya config.ts me naam theek karo.`,
+    );
+  }
+
+  const missing = (['articleId', 'searchCampaignId'] as const).filter(
+    (field) => data.index(field) === -1,
+  );
+  if (missing.length > 0) {
+    const names = missing.map((f) => (config.accountMap.columns[f] ?? [f])[0]).join(', ');
+    throw new Error(
+      `${config.accountMap.tab} ki row 1 me ye columns add karo: ${names}. ` +
+        'Inke bina campaign ka record likha nahi ja sakta (aur duplicate ban sakti hai).',
+    );
+  }
+}
+
 export interface CampaignRecord {
   siteId: string;
   customerId: string;
