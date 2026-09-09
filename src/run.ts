@@ -8,6 +8,7 @@ import {
   appendCampaignRecord,
   assertAccountMapWritable,
   readAccountMap,
+  readSiteIds,
   readCreatedCampaigns,
   readRows,
   selectEligible,
@@ -36,18 +37,38 @@ function printPlanPreview(plan: CampaignPlan): void {
  * Pehle AD_ACCOUNT_MAP tab dekhte hain (Site ID / Website se), na mile to
  * .env wali GOOGLE_ADS_CUSTOMER_ID fallback hai.
  */
-function resolveCustomerId(row: ArticleRow, accountMap: Map<string, string>): string {
+function resolveCustomerId(
+  row: ArticleRow,
+  accountMap: Map<string, string>,
+  resolvedSiteId?: string,
+): string {
+  const fromResolved = resolvedSiteId ? accountMap.get(siteKey(resolvedSiteId)) : undefined;
   const fromSiteId = row.siteId ? accountMap.get(siteKey(row.siteId)) : undefined;
   const fromWebsite = row.website ? accountMap.get(siteKey(row.website)) : undefined;
-  return fromSiteId ?? fromWebsite ?? env.ads.customerId;
+  return fromResolved ?? fromSiteId ?? fromWebsite ?? env.ads.customerId;
 }
 
-async function processRow(row: ArticleRow, accountMap: Map<string, string>): Promise<RowOutcome> {
+/** Row ke domain se WEBSITE_CONFIG wala Site ID (SITE-4 jaisa) nikalta hai. */
+function resolveSiteId(row: ArticleRow, siteIds: Map<string, string>): string | undefined {
+  return (
+    (row.website ? siteIds.get(siteKey(row.website)) : undefined) ??
+    (row.liveUrl ? siteIds.get(siteKey(row.liveUrl)) : undefined)
+  );
+}
+
+async function processRow(
+  row: ArticleRow,
+  accountMap: Map<string, string>,
+  siteIds: Map<string, string>,
+): Promise<RowOutcome> {
   logger.blank();
   logger.info(`▶ ${row.articleId} — "${row.title || row.topic}" (row ${row.rowNumber})`);
 
+  // try ke bahar, taaki error hone par bhi record me likh sakein.
+  const resolvedSiteId = resolveSiteId(row, siteIds);
+
   try {
-    let customerId = resolveCustomerId(row, accountMap);
+    let customerId = resolveCustomerId(row, accountMap, resolvedSiteId);
     if (!customerId) {
       const message =
         `Google Ads account nahi mila. ${config.accountMap.tab} tab me ` +
@@ -61,8 +82,8 @@ async function processRow(row: ArticleRow, accountMap: Map<string, string>): Pro
       customerId = 'DRY-RUN-NO-ACCOUNT';
     }
 
-    const plan = await buildPlan(row, customerId);
-    logger.step(`🏢 Google Ads account: ${customerId}`);
+    const plan = await buildPlan(row, customerId, resolvedSiteId);
+    logger.step(`🏢 Site: ${resolvedSiteId ?? "(WEBSITE_CONFIG me nahi mila)"}  |  Google Ads account: ${customerId}`);
     logger.step(`✅ URL check OK, budget ${plan.dailyBudget}/day, GEO ${plan.geo}`);
     printPlanPreview(plan);
 
@@ -70,7 +91,7 @@ async function processRow(row: ArticleRow, accountMap: Map<string, string>): Pro
 
     if (!env.dryRun) {
       await appendCampaignRecord({
-        siteId: row.siteId || row.website,
+        siteId: resolvedSiteId ?? row.siteId ?? row.website,
         customerId,
         articleId: row.articleId,
         searchCampaignId: result.campaignId,
@@ -95,8 +116,8 @@ async function processRow(row: ArticleRow, accountMap: Map<string, string>): Pro
     if (!env.dryRun) {
       try {
         await appendCampaignRecord({
-          siteId: row.siteId || row.website,
-          customerId: resolveCustomerId(row, accountMap),
+          siteId: resolvedSiteId ?? row.siteId ?? row.website,
+          customerId: resolveCustomerId(row, accountMap, resolvedSiteId),
           articleId: row.articleId,
           searchCampaignId: partialId ?? '',
           status: 'ERROR',
@@ -122,6 +143,9 @@ async function main(): Promise<void> {
 
   const allRows = await readRows();
   logger.info(`📄 ${env.sheetTab} padhi — ${allRows.length} rows`);
+
+  const siteIds = await readSiteIds();
+  logger.info(`🌐 ${config.websiteConfig.tab} — ${siteIds.size} site codes mile`);
 
   const accountMap = await readAccountMap();
   logger.info(
@@ -163,7 +187,7 @@ async function main(): Promise<void> {
 
   const outcomes: RowOutcome[] = [];
   for (const row of eligible) {
-    outcomes.push(await processRow(row, accountMap));
+    outcomes.push(await processRow(row, accountMap, siteIds));
   }
 
   const ok = outcomes.filter((o) => o.ok);

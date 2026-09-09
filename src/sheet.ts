@@ -207,6 +207,48 @@ export function siteKey(value: string): string {
   return (cleaned.split('/')[0] ?? '').trim();
 }
 
+/**
+ * WEBSITE_CONFIG tab: domain -> Site ID (SITE-1, SITE-4...).
+ * Campaign ke naam me site ka chhota code aata hai, poora domain nahi.
+ */
+export async function readSiteIds(): Promise<Map<string, string>> {
+  const sheets = getClient();
+  const map = new Map<string, string>();
+
+  let values: string[][] = [];
+  try {
+    const response = await withRetry(`${config.websiteConfig.tab} padhna`, () =>
+      sheets.spreadsheets.values.get({
+        spreadsheetId: env.sheetId,
+        range: `${config.websiteConfig.tab}!A1:Z`,
+        valueRenderOption: 'UNFORMATTED_VALUE',
+      }),
+    );
+    values = (response.data.values ?? []) as string[][];
+  } catch {
+    return map; // Tab nahi hai — koi baat nahi, domain se hi kaam chal jayega.
+  }
+
+  if (values.length < 2) return map;
+
+  const configHeaders = (values[0] ?? []).map((h) => (h ?? '').toString());
+  const findColumn = (aliases: string[]): number =>
+    configHeaders.findIndex((header) => aliases.some((a) => normalise(a) === normalise(header)));
+
+  const siteIdIndex = findColumn(config.websiteConfig.columns.siteId ?? []);
+  const domainIndex = findColumn(config.websiteConfig.columns.domain ?? []);
+  if (siteIdIndex === -1 || domainIndex === -1) return map;
+
+  for (let i = 1; i < values.length; i += 1) {
+    const raw = (values[i] ?? []) as string[];
+    const domain = siteKey((raw[domainIndex] ?? '').toString());
+    const siteId = (raw[siteIdIndex] ?? '').toString().trim();
+    if (domain && siteId) map.set(domain, siteId);
+  }
+
+  return map;
+}
+
 /** AD_ACCOUNT_MAP tab ka kaccha data + column dhoondhne ka helper. */
 interface AccountMapData {
   headers: string[];

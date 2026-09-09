@@ -143,6 +143,18 @@ export const config = {
   },
 
   /**
+   * WEBSITE_CONFIG tab — domain se site ka chhota code (SITE-1, SITE-4...).
+   * Campaign ke naam me yahi code aata hai, poora domain nahi.
+   */
+  websiteConfig: {
+    tab: 'WEBSITE_CONFIG',
+    columns: {
+      siteId: ['Site ID', 'SiteID', 'Site Id'],
+      domain: ['Domain URL', 'Domain', 'Website', 'Website URL'],
+    } as Record<string, string[]>,
+  },
+
+  /**
    * AD_ACCOUNT_MAP tab — kaunsi site ki campaign kis Google Ads account me
    * banegi. CONTENT_QUEUE ki row ka Site ID / Website yahan match hota hai
    * aur uske saamne wali Google Ads CID use hoti hai.
