@@ -16,10 +16,16 @@ const RETRYABLE = [
   'socket hang up',
   'network socket disconnected',
   'fetch failed',
+  // AbortSignal.timeout() aisa message deta hai
+  'aborted due to timeout',
+  'TimeoutError',
 ];
 
 function isRetryable(error: unknown): boolean {
-  const text = error instanceof Error ? `${error.message} ${String((error as { code?: string }).code ?? '')}` : String(error);
+  const text =
+    error instanceof Error
+      ? `${error.name} ${error.message} ${String((error as { code?: string }).code ?? '')}`
+      : String(error);
   return RETRYABLE.some((needle) => text.includes(needle));
 }
 

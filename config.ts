@@ -163,7 +163,7 @@ export const config = {
   /** Validation ------------------------------------------------------------- */
   validation: {
     /** Live URL must answer within this time. */
-    urlTimeoutMs: 10_000,
+    urlTimeoutMs: 20_000,
     /** Check that the Live URL host matches the Website column. */
     matchUrlToWebsite: true,
   },

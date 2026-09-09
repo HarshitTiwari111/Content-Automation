@@ -18,9 +18,6 @@ function toMicros(amount: number): string {
   return String(Math.round(amount * 1_000_000));
 }
 
-function today(): string {
-  return new Date().toISOString().slice(0, 10);
-}
 
 /** "customers/123/campaigns/456" -> "456" */
 function idFromResourceName(resourceName: string): string {
@@ -226,7 +223,8 @@ export async function createSearchCampaign(plan: CampaignPlan): Promise<Campaign
             targetContentNetwork: false,
             targetPartnerSearchNetwork: false,
           },
-          startDate: today(),
+          // startDate jaanbujh ke nahi bhej rahe — is API version me wo field
+          // nahi hai, aur na dene par Google aaj ki date khud laga deta hai.
           finalUrlSuffix: plan.finalUrlSuffix,
         },
       },

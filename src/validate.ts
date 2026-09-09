@@ -1,4 +1,5 @@
 import { config } from '../config.js';
+import { withRetry } from './retry.js';
 import type { ArticleRow } from './types.js';
 
 /** Every field the campaign builder cannot work without. */
@@ -43,11 +44,13 @@ export async function assertUrlReachable(row: ArticleRow): Promise<void> {
     }
   }
 
-  const response = await fetch(url, {
-    method: 'GET',
-    redirect: 'follow',
-    signal: AbortSignal.timeout(config.validation.urlTimeoutMs),
-  }).catch((error: unknown) => {
+  const response = await withRetry('Live URL check', () =>
+    fetch(url, {
+      method: 'GET',
+      redirect: 'follow',
+      signal: AbortSignal.timeout(config.validation.urlTimeoutMs),
+    }),
+  ).catch((error: unknown) => {
     throw new Error(`Live URL khul nahi raha: ${(error as Error).message}`);
   });
 
