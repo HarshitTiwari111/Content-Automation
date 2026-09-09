@@ -12,8 +12,7 @@
     "dry": "tsx src/run.ts --dry",
     "typecheck": "tsc --noEmit",
     "preview": "tsx scripts/preview.ts",
-    "check": "tsx scripts/check-ads.ts",
-    "serve": "tsx scripts/serve.ts"
+    "check": "tsx scripts/check-ads.ts"
   },
   "dependencies": {
     "dotenv": "16.4.7",
