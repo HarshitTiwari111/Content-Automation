@@ -31,13 +31,25 @@ function coreWords(text: string): string[] {
   return words(text).filter((w) => !STOPWORDS.has(w) && w.length > 1);
 }
 
-function isAllowed(keyword: string): boolean {
+/**
+ * Article khud jin shabdon ke baare me hai.
+ * "Best Free VPN" jaise article me "free" ko ban karna galat hoga — wahi to
+ * article ka topic hai. Isliye article ke apne shabd ban-list se bahar rehte hain.
+ */
+function ownWords(row: ArticleRow): Set<string> {
+  const text = [row.title, row.topic, row.category, row.brand].join(' ');
+  return new Set(words(text));
+}
+
+function isAllowed(keyword: string, own: Set<string>): boolean {
   const parts = keyword.split(' ');
   if (parts.length < config.keywords.minWords) return false;
   if (parts.length > config.keywords.maxWords) return false;
   if (keyword.length > 80) return false;
   if (/^\d+$/.test(keyword.replace(/\s/g, ''))) return false;
-  return !config.keywords.bannedWords.some((banned) => parts.includes(banned));
+  return !config.keywords.bannedWords.some(
+    (banned) => parts.includes(banned) && !own.has(banned),
+  );
 }
 
 /**
@@ -46,6 +58,7 @@ function isAllowed(keyword: string): boolean {
  * dry run shows exactly what the live run will create.
  */
 export function generateKeywordTexts(row: ArticleRow): string[] {
+  const own = ownWords(row);
   const titleCore = coreWords(row.title || row.topic);
   const topicCore = coreWords(row.topic);
   const brand = clean(row.brand);
@@ -81,7 +94,7 @@ export function generateKeywordTexts(row: ArticleRow): string[] {
   const result: string[] = [];
   for (const candidate of candidates) {
     const keyword = clean(candidate);
-    if (!keyword || seen.has(keyword) || !isAllowed(keyword)) continue;
+    if (!keyword || seen.has(keyword) || !isAllowed(keyword, own)) continue;
     seen.add(keyword);
     result.push(keyword);
     if (result.length >= config.keywords.maxKeywords) break;
@@ -102,9 +115,16 @@ export function toCriteria(texts: string[]): KeywordCriterion[] {
   return criteria;
 }
 
-/** Global negatives plus the banned word list. */
-export function negativeKeywords(): string[] {
-  return [...new Set([...config.keywords.negatives, ...config.keywords.bannedWords])];
+/**
+ * Global negatives + banned words — lekin wo shabd hata ke jo article ka apna
+ * topic hain. Warna "Best Free VPN" wale article me "free" negative ban jata
+ * aur ad kabhi dikhti hi nahi.
+ */
+export function negativeKeywords(row: ArticleRow): string[] {
+  const own = ownWords(row);
+  return [...new Set([...config.keywords.negatives, ...config.keywords.bannedWords])].filter(
+    (word) => !own.has(word),
+  );
 }
 
 /** Throws when an article cannot produce enough usable keywords. */
@@ -119,5 +139,5 @@ export function buildKeywords(row: ArticleRow): {
       'Keywords generate nahi hue — Title/Topic/Category columns bahut chhote ya khaali hain.',
     );
   }
-  return { criteria: toCriteria(texts), texts, negatives: negativeKeywords() };
+  return { criteria: toCriteria(texts), texts, negatives: negativeKeywords(row) };
 }
