@@ -72,13 +72,21 @@ const HOME = `<!doctype html>
 
   <p>Chalne me 20–40 second lag sakte hain — page tab tak khaali dikhega.</p>
   <hr>
-  <p><small>Live campaign yahan se nahi banti. Uske liye terminal me
-  <code>npm run create -- --live</code> chalana padta hai.</small></p>
+  <p><small><b>Live run</b> (asli PAUSED campaign banti hai) sirf secret key ke saath chalti hai:<br>
+  <code>/create?key=RUN_KEY&amp;limit=1</code> — ek run me zyada se zyada 5.</small></p>
 </body>
 </html>`;
 
+/**
+ * Live run ki chaabi. Ye .env / Render me set karni padti hai.
+ * Set nahi hai to /create route band rehta hai — koi galti se campaign
+ * nahi bana sakta.
+ */
+const RUN_KEY = (process.env.RUN_KEY ?? '').trim();
+
 const server = createServer((req, res) => {
-  const url = (req.url ?? '/').split('?')[0] ?? '/';
+  const fullUrl = new URL(req.url ?? '/', `http://localhost:${PORT}`);
+  const url = fullUrl.pathname;
 
   // Dashboard alag URL se call kare to browser block na kare.
   res.setHeader('Access-Control-Allow-Origin', '*');
@@ -93,6 +101,37 @@ const server = createServer((req, res) => {
   if (url === '/health') {
     res.writeHead(200, { 'Content-Type': 'application/json' });
     res.end(JSON.stringify({ ok: true, port: PORT }));
+    return;
+  }
+
+  // Live run — asli PAUSED campaign banata hai. Sirf sahi key ke saath.
+  if (url === '/create') {
+    if (!RUN_KEY) {
+      res.writeHead(403, { 'Content-Type': 'text/plain; charset=utf-8' });
+      res.end('Live run band hai. Chalane ke liye RUN_KEY environment variable set karo.');
+      return;
+    }
+    if (fullUrl.searchParams.get('key') !== RUN_KEY) {
+      res.writeHead(403, { 'Content-Type': 'text/plain; charset=utf-8' });
+      res.end('Galat key.');
+      return;
+    }
+
+    // Ek run me zyada se zyada 5 — galti se dozens na ban jayein.
+    const asked = Number(fullUrl.searchParams.get('limit') ?? '1');
+    const limit = Number.isFinite(asked) && asked > 0 ? Math.min(asked, 5) : 1;
+
+    void runCommand(['src/run.ts', '--live', `--limit=${limit}`]).then((output) => {
+      res.writeHead(200, { 'Content-Type': 'text/html; charset=utf-8' });
+      res.end(
+        `<!doctype html><meta charset="utf-8"><title>Live run</title>` +
+          `<body style="font-family:system-ui,sans-serif;max-width:900px;margin:40px auto;padding:0 16px">` +
+          `<p><a href="/">&larr; wapas</a></p>` +
+          `<pre style="background:#f6f6f6;padding:16px;border-radius:8px;overflow:auto;white-space:pre-wrap">` +
+          escapeHtml(output) +
+          `</pre></body>`,
+      );
+    });
     return;
   }
 
