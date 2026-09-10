@@ -4,9 +4,10 @@
 name: Sync reporting
 
 on:
-  schedule:
-    # Roz subah 7:30 IST (02:00 UTC)
-    - cron: '0 2 * * *'
+  # NOTE: automatic schedule jaanbujh ke band hai — faisla hone par chalu karna.
+  #
+  # schedule:
+  #   - cron: '0 2 * * *'   # roz subah 7:30 IST
   workflow_dispatch:
 
 concurrency:

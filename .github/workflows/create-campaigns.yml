@@ -8,9 +8,12 @@
 name: Create Search campaigns
 
 on:
-  schedule:
-    # Har 15 minute (GitHub UTC me chalata hai; is script ke liye farak nahi padta)
-    - cron: '*/15 * * * *'
+  # NOTE: automatic schedule jaanbujh ke band hai — abhi faisla nahi hua ki
+  # timer se chalega ya Sheet ke button se. Chalu karna ho to neeche wali
+  # do line se # hata do.
+  #
+  # schedule:
+  #   - cron: '*/15 * * * *'
   workflow_dispatch:
     inputs:
       limit:
