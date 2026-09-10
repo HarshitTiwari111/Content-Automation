@@ -223,6 +223,9 @@ export const config = {
     matchUrlToWebsite: true,
   },
 
+  /** Sheet me date/time isi zone me likhi jaati hai. */
+  timeZone: 'Asia/Kolkata',
+
   /** How many rows one run may process. Safety brake. */
   maxRowsPerRun: 20,
 } as const;

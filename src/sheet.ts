@@ -207,6 +207,34 @@ export function siteKey(value: string): string {
   return (cleaned.split('/')[0] ?? '').trim();
 }
 
+/**
+ * Sheet me date wahi shakl me jaani chahiye jo baaki rows me hai:
+ * "10/09/2026 10:44:05" — India time, ISO/UTC nahi.
+ */
+function sheetTimestamp(date = new Date()): string {
+  const parts = new Intl.DateTimeFormat('en-GB', {
+    timeZone: config.timeZone,
+    year: 'numeric',
+    month: '2-digit',
+    day: '2-digit',
+    hour: '2-digit',
+    minute: '2-digit',
+    second: '2-digit',
+    hour12: false,
+  }).formatToParts(date);
+
+  const get = (type: string): string => parts.find((p) => p.type === type)?.value ?? '';
+  return `${get('day')}/${get('month')}/${get('year')} ${get('hour')}:${get('minute')}:${get('second')}`;
+}
+
+/**
+ * USER_ENTERED me "=" ya "+" se shuru hone wala text formula ban jaata hai.
+ * Error message aisa ho sakta hai, isliye aage ek space laga dete hain.
+ */
+function safeCell(value: string): string {
+  return /^[=+\-@]/.test(value) ? ` ${value}` : value;
+}
+
 function toNumber(value: string): number | undefined {
   const cleaned = value.replace(/[^0-9.]/g, '');
   if (!cleaned) return undefined;
@@ -443,17 +471,17 @@ export async function appendErrorLog(entry: {
     const i = at(field);
     if (i !== -1) values[i] = value;
   };
-  put('timestamp', new Date().toISOString());
+  put('timestamp', sheetTimestamp());
   put('articleId', entry.articleId);
   put('component', config.errorLog.component);
-  put('message', entry.message);
+  put('message', safeCell(entry.message));
   put('retryStatus', entry.retryStatus);
 
   await withRetry(`${config.errorLog.tab} me likhna`, () =>
     sheets.spreadsheets.values.append({
       spreadsheetId: env.sheetId,
       range: `${config.errorLog.tab}!A1`,
-      valueInputOption: 'RAW',
+      valueInputOption: 'USER_ENTERED',
       insertDataOption: 'INSERT_ROWS',
       requestBody: { values: [values] },
     }),
