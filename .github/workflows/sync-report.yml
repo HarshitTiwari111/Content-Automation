@@ -1,0 +1,42 @@
+# Phase 6 — har din Google Ads se clicks/spend/CPC laake REPORTING tab bharta hai.
+# Ye sirf padhta hai; koi campaign banata ya badalta nahi.
+
+name: Sync reporting
+
+on:
+  schedule:
+    # Roz subah 7:30 IST (02:00 UTC)
+    - cron: '0 2 * * *'
+  workflow_dispatch:
+
+concurrency:
+  group: sync-search-report
+  cancel-in-progress: false
+
+jobs:
+  report:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+          cache: npm
+
+      - run: npm ci
+
+      - name: Sync clicks / spend / CPC
+        env:
+          SPREADSHEET_ID: ${{ secrets.SPREADSHEET_ID }}
+          SHEET_TAB: ${{ secrets.SHEET_TAB }}
+          GOOGLE_CLIENT_EMAIL: ${{ secrets.GOOGLE_CLIENT_EMAIL }}
+          GOOGLE_PRIVATE_KEY: ${{ secrets.GOOGLE_PRIVATE_KEY }}
+          ADS_PROXY_BASE_URL: ${{ secrets.ADS_PROXY_BASE_URL }}
+          ADS_API_VERSION: ${{ secrets.ADS_API_VERSION }}
+          GOOGLE_ADS_REFRESH_TOKEN: ${{ secrets.GOOGLE_ADS_REFRESH_TOKEN }}
+          GOOGLE_ADS_CUSTOMER_ID: ${{ secrets.GOOGLE_ADS_CUSTOMER_ID }}
+          GOOGLE_ADS_LOGIN_CUSTOMER_ID: ${{ secrets.GOOGLE_ADS_LOGIN_CUSTOMER_ID }}
+        run: npm run report

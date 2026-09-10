@@ -1,0 +1,54 @@
+# PDF section 16 ka "Scheduler/automation host".
+# Har 15 minute me Sheet dekhta hai aur jahan Search Ads (Y/N) = YES hai
+# wahan PAUSED Search campaign bana deta hai.
+#
+# Kisi ko terminal chhune ki zarurat nahi. Chahiye to GitHub ke
+# Actions tab se "Run workflow" dabake haath se bhi chala sakte ho.
+
+name: Create Search campaigns
+
+on:
+  schedule:
+    # Har 15 minute (GitHub UTC me chalata hai; is script ke liye farak nahi padta)
+    - cron: '*/15 * * * *'
+  workflow_dispatch:
+    inputs:
+      limit:
+        description: 'Ek run me kitni campaigns banani hain'
+        required: false
+        default: '5'
+
+# Do run ek saath na chalein — warna duplicate ban sakti hain.
+concurrency:
+  group: create-search-campaigns
+  cancel-in-progress: false
+
+jobs:
+  create:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+          cache: npm
+
+      - run: npm ci
+
+      - name: Create campaigns (hamesha PAUSED)
+        env:
+          SPREADSHEET_ID: ${{ secrets.SPREADSHEET_ID }}
+          SHEET_TAB: ${{ secrets.SHEET_TAB }}
+          GOOGLE_CLIENT_EMAIL: ${{ secrets.GOOGLE_CLIENT_EMAIL }}
+          GOOGLE_PRIVATE_KEY: ${{ secrets.GOOGLE_PRIVATE_KEY }}
+          ADS_PROXY_BASE_URL: ${{ secrets.ADS_PROXY_BASE_URL }}
+          ADS_API_VERSION: ${{ secrets.ADS_API_VERSION }}
+          GOOGLE_ADS_REFRESH_TOKEN: ${{ secrets.GOOGLE_ADS_REFRESH_TOKEN }}
+          GOOGLE_ADS_CUSTOMER_ID: ${{ secrets.GOOGLE_ADS_CUSTOMER_ID }}
+          GOOGLE_ADS_LOGIN_CUSTOMER_ID: ${{ secrets.GOOGLE_ADS_LOGIN_CUSTOMER_ID }}
+          OPENAI_API_KEY: ${{ secrets.OPENAI_API_KEY }}
+          DRY_RUN: 'false'
+        run: npm run create -- --live --limit=${{ github.event.inputs.limit || 5 }}
