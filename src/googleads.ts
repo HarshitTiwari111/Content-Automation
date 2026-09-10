@@ -171,7 +171,17 @@ async function mutate(
 
   const text = await response.text();
   if (!response.ok) {
-    throw new Error(`${what} fail — ${extractApiError(response.status, text)}`);
+    let detail = extractApiError(response.status, text);
+
+    // Ye error aksar tab aata hai jab pichli adhoori campaign Google Ads me
+    // padi ho — naam wahi hai, isliye nayi ban hi nahi sakti.
+    if (detail.includes('DUPLICATE_CAMPAIGN_NAME')) {
+      detail +=
+        ' → Google Ads me isi naam ki campaign pehle se hai (shayad pichli adhoori run se). ' +
+        'Use Remove karo, phir dobara chalao.';
+    }
+
+    throw new Error(`${what} fail — ${detail}`);
   }
 
   let parsed: MutateResponse;
