@@ -47,7 +47,18 @@ function resolveCustomerId(
   const fromResolved = resolvedSiteId ? accountMap.get(siteKey(resolvedSiteId)) : undefined;
   const fromSiteId = row.siteId ? accountMap.get(siteKey(row.siteId)) : undefined;
   const fromWebsite = row.website ? accountMap.get(siteKey(row.website)) : undefined;
-  return fromResolved ?? fromSiteId ?? fromWebsite ?? env.ads.customerId;
+  const mapped = fromResolved ?? fromSiteId ?? fromWebsite;
+  if (mapped) return mapped;
+
+  /*
+   * Har site ka apna Google Ads account hai. Isliye jab mapping tab bhari ho
+   * par is site ki row na ho, to .env wali CID chup-chaap use karna galat
+   * hoga — campaign galat account me ban jayegi. Aise me kuch wapas nahi
+   * karte, aur processRow saaf error de deta hai.
+   *
+   * Tab bilkul khaali ho (testing) tabhi .env wali CID chalti hai.
+   */
+  return accountMap.size === 0 ? env.ads.customerId : '';
 }
 
 /** Row ke domain se WEBSITE_CONFIG wala Site ID (SITE-4 jaisa) nikalta hai. */
@@ -121,10 +132,11 @@ async function processRow(
   try {
     let customerId = resolveCustomerId(row, accountMap, resolvedSiteId);
     if (!customerId) {
+      const which = resolvedSiteId ?? row.siteId ?? row.website ?? '(site pata nahi)';
       const message =
-        `Google Ads account nahi mila. ${config.accountMap.tab} tab me ` +
-        `"${row.siteId || row.website}" ke saamne Google Ads CID daalo ` +
-        '(ya .env me GOOGLE_ADS_CUSTOMER_ID bharo).';
+        `"${which}" ka Google Ads account nahi mila. ${config.accountMap.tab} tab me ` +
+        'is site ki row bana ke uske saamne Google Ads CID daalo. ' +
+        'Har site ki campaign uske apne account me hi banni chahiye.';
 
       // Dry run me kuch bheja hi nahi jaata, isliye account ke bina bhi
       // keywords/ad copy ka preview dikha dete hain.
