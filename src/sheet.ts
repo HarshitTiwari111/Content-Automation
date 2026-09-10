@@ -420,6 +420,110 @@ export async function readCreatedCampaigns(): Promise<Map<string, string>> {
   return created;
 }
 
+/** Ek reporting row — REPORTING tab me jaati hai. */
+export interface ReportRow {
+  date: string;
+  articleId: string;
+  liveUrl: string;
+  trafficSource: string;
+  impressions: number;
+  clicks: number;
+  spend: number;
+  cpc: number;
+}
+
+/**
+ * REPORTING tab me ek row likhta hai.
+ * Usi Article ID + Date + Traffic Source ki row pehle se ho to usko update
+ * karta hai, warna nayi jodta hai — taaki roz-roz duplicate na banein.
+ */
+export async function upsertReportRow(entry: ReportRow): Promise<void> {
+  const sheets = getClient();
+  const tab = config.report.tab;
+
+  const response = await withRetry(`${tab} padhna`, () =>
+    sheets.spreadsheets.values.get({
+      spreadsheetId: env.sheetId,
+      range: `${tab}!A1:Z`,
+    }),
+  );
+
+  const values = (response.data.values ?? []) as string[][];
+  const reportHeaders = (values[0] ?? []).map((h) => (h ?? '').toString());
+  if (reportHeaders.length === 0) {
+    throw new Error(`${tab} tab khaali hai — row 1 me headers hone chahiye.`);
+  }
+
+  const at = (field: string): number => {
+    const aliases = config.report.columns[field] ?? [];
+    return reportHeaders.findIndex((header) =>
+      aliases.some((alias) => normalise(alias) === normalise(header)),
+    );
+  };
+
+  const row: string[] = new Array(reportHeaders.length).fill('');
+  const put = (field: string, value: string): void => {
+    const i = at(field);
+    if (i !== -1) row[i] = value;
+  };
+  put('date', entry.date);
+  put('articleId', entry.articleId);
+  put('liveUrl', entry.liveUrl);
+  put('trafficSource', entry.trafficSource);
+  put('impressions', String(entry.impressions));
+  put('clicks', String(entry.clicks));
+  put('spend', String(entry.spend));
+  put('cpc', String(entry.cpc));
+  put('lastSync', sheetTimestamp());
+
+  // Wahi article + date + source pehle se hai kya?
+  const articleIdx = at('articleId');
+  const dateIdx = at('date');
+  const sourceIdx = at('trafficSource');
+
+  let existingRow = -1;
+  if (articleIdx !== -1) {
+    for (let i = 1; i < values.length; i += 1) {
+      const raw = values[i] ?? [];
+      const sameArticle = (raw[articleIdx] ?? '').toString().trim() === entry.articleId;
+      const sameDate = dateIdx === -1 || (raw[dateIdx] ?? '').toString().trim() === entry.date;
+      const sameSource =
+        sourceIdx === -1 || (raw[sourceIdx] ?? '').toString().trim() === entry.trafficSource;
+      if (sameArticle && sameDate && sameSource) {
+        existingRow = i + 1; // 1-based
+        break;
+      }
+    }
+  }
+
+  if (existingRow !== -1) {
+    await withRetry(`${tab} update karna`, () =>
+      sheets.spreadsheets.values.update({
+        spreadsheetId: env.sheetId,
+        range: `${tab}!A${existingRow}`,
+        valueInputOption: 'USER_ENTERED',
+        requestBody: { values: [row] },
+      }),
+    );
+    return;
+  }
+
+  await withRetry(`${tab} me likhna`, () =>
+    sheets.spreadsheets.values.append({
+      spreadsheetId: env.sheetId,
+      range: `${tab}!A1`,
+      valueInputOption: 'USER_ENTERED',
+      insertDataOption: 'INSERT_ROWS',
+      requestBody: { values: [row] },
+    }),
+  );
+}
+
+/** Aaj ki date, Sheet wali shakl me. */
+export function today(): string {
+  return sheetTimestamp().split(' ')[0] ?? '';
+}
+
 /** CONTENT_QUEUE me ye column maujood hai ya nahi (readRows ke baad hi sahi jawab dega). */
 export function hasColumn(field: string): boolean {
   return columnIndex(field) !== -1;

@@ -177,10 +177,24 @@ export const config = {
    * me likhte hain. Ye sirf padhta hai, koi campaign nahi badalta.
    */
   report: {
+    tab: 'REPORTING',
+    /** Traffic Source column me yahi likha jaata hai. */
+    trafficSource: 'Google Search',
     /** GAQL date range: LAST_7_DAYS, LAST_30_DAYS, ALL_TIME... */
     dateRange: 'LAST_30_DAYS',
     /** Ek query me itne campaign ids. */
     batchSize: 200,
+    columns: {
+      date: ['Date'],
+      articleId: ['Article ID', 'ArticleID', 'Article Id'],
+      liveUrl: ['Live URL', 'URL', 'Live Url'],
+      trafficSource: ['Traffic Source', 'Source', 'Channel'],
+      impressions: ['Impressions'],
+      clicks: ['Clicks'],
+      spend: ['Spend', 'Cost'],
+      cpc: ['CPC', 'Avg CPC', 'Average CPC'],
+      lastSync: ['Last Sync', 'Last Synced', 'Synced'],
+    } as Record<string, string[]>,
   },
 
   /**

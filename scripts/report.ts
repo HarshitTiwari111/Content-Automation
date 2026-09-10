@@ -18,6 +18,8 @@ import {
   readRows,
   readSiteIds,
   siteKey,
+  today,
+  upsertReportRow,
   writeBack,
 } from '../src/sheet.js';
 import type { ArticleRow } from '../src/types.js';
@@ -26,7 +28,12 @@ setDefaultResultOrder('ipv4first');
 
 interface AdsRow {
   campaign?: { id?: string; status?: string };
-  metrics?: { clicks?: string | number; costMicros?: string | number; averageCpc?: string | number };
+  metrics?: {
+    clicks?: string | number;
+    impressions?: string | number;
+    costMicros?: string | number;
+    averageCpc?: string | number;
+  };
 }
 
 function toUnits(micros: string | number | undefined): number {
@@ -65,14 +72,6 @@ async function main(): Promise<void> {
   const siteIds = await readSiteIds();
   const accountMap = await readAccountMap();
 
-  const reportColumns = ['clicks', 'spend', 'cpc'].filter((f) => hasColumn(f));
-  if (reportColumns.length === 0) {
-    throw new Error(
-      `${env.sheetTab} ki row 1 me "Clicks", "Spend" aur "CPC" columns add karo — ` +
-        'inke bina data likhne ki jagah hi nahi hai.',
-    );
-  }
-
   const withCampaign = rows.filter((row) => row.searchCampaignId !== '');
   logger.info(`📄 ${withCampaign.length} rows me Search Campaign ID mila`);
 
@@ -104,7 +103,7 @@ async function main(): Promise<void> {
     for (let i = 0; i < ids.length; i += config.report.batchSize) {
       const batch = ids.slice(i, i + config.report.batchSize);
       const query =
-        'SELECT campaign.id, campaign.status, metrics.clicks, metrics.cost_micros, ' +
+        'SELECT campaign.id, campaign.status, metrics.clicks, metrics.impressions, metrics.cost_micros, ' +
         `metrics.average_cpc FROM campaign WHERE campaign.id IN (${batch.join(',')}) ` +
         `AND segments.date DURING ${config.report.dateRange}`;
 
@@ -128,21 +127,35 @@ async function main(): Promise<void> {
         if (!data) continue; // Is date range me is campaign ka koi data nahi.
 
         const clicks = Number(data.metrics?.clicks ?? 0);
+        const impressions = Number(data.metrics?.impressions ?? 0);
         const spend = toUnits(data.metrics?.costMicros);
         const cpc = toUnits(data.metrics?.averageCpc);
         const adsStatus = (data.campaign?.status ?? '').toUpperCase();
 
         try {
+          // Asli reporting REPORTING tab me jaati hai (PDF section 13).
+          await upsertReportRow({
+            date: today(),
+            articleId: row.articleId,
+            liveUrl: row.liveUrl,
+            trafficSource: config.report.trafficSource,
+            impressions,
+            clicks,
+            spend,
+            cpc,
+          });
+
+          // CONTENT_QUEUE me ye columns hon to wahan bhi bhar dete hain.
           await writeBack(row.rowNumber, {
-            clicks: String(clicks),
-            spend: String(spend),
-            cpc: String(cpc),
+            ...(hasColumn('clicks') ? { clicks: String(clicks) } : {}),
+            ...(hasColumn('spend') ? { spend: String(spend) } : {}),
+            ...(hasColumn('cpc') ? { cpc: String(cpc) } : {}),
             // Google me campaign chaalu ho gayi to Sheet me LIVE dikhao
             // (PDF section 14 ka state). Warna status waisa hi rehne do.
             ...(adsStatus === 'ENABLED' ? { status: 'LIVE' } : {}),
           });
           logger.step(
-            `${row.articleId}: ${clicks} clicks, ${spend} spend, ${cpc} CPC` +
+            `${row.articleId}: ${impressions} impr, ${clicks} clicks, ${spend} spend, ${cpc} CPC` +
               (adsStatus === 'ENABLED' ? '  → LIVE' : ''),
           );
           updated += 1;
