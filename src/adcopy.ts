@@ -126,11 +126,16 @@ export function buildAdCopy(row: ArticleRow): AdCopy {
     uniquePush(descriptions, sentence(`${category}: ${topic}`, descriptionMaxChars), maxDescriptions);
   }
 
+  // Google ka rule: path2 tabhi de sakte hain jab path1 bhi ho.
+  // Category khaali hui to path1 nahi banta — tab path2 bhi nahi bhejna.
+  const path1 = toPath(row.category) || toPath(row.brand);
+  const path2 = path1 === toPath(row.category) ? toPath(row.brand) : '';
+
   const copy: AdCopy = {
     headlines,
     descriptions,
-    path1: toPath(row.category),
-    path2: toPath(row.brand),
+    path1,
+    path2: path1 ? path2 : '',
   };
 
   validateAdCopy(copy);
