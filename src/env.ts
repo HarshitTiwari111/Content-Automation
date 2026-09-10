@@ -71,6 +71,16 @@ export const env = {
   },
 
   /**
+   * AI se ad copy banane ke liye. Key na ho to AI band rehta hai aur copy
+   * purane tarike se (article ke shabdon se) banti hai.
+   */
+  openAi: {
+    apiKey: read('OPENAI_API_KEY'),
+    model: read('OPENAI_MODEL') || 'gpt-4o-mini',
+    baseUrl: (read('OPENAI_BASE_URL') || 'https://api.openai.com/v1').replace(/\/+$/, ''),
+  },
+
+  /**
    * Dry run is ON unless it is explicitly turned off.
    * --dry always wins, --live turns it off from the command line.
    */

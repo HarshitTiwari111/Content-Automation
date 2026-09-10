@@ -99,6 +99,22 @@ export const config = {
     ],
   },
 
+  /**
+   * AI se ad copy ------------------------------------------------------------
+   * PDF section 16: "AI model/API for content and ad-copy generation".
+   *
+   * enabled = false kar do to AI band, copy purane tarike se (article ke
+   * shabdon se) banegi. API key na ho to bhi apne aap purana tarika chalega.
+   */
+  ai: {
+    enabled: true,
+    /** Ek article pe ek hi call — kharcha kam rakhne ke liye. */
+    timeoutMs: 30_000,
+    /** AI kitni lines maange. Google ki limit config.rsa se aati hai. */
+    askHeadlines: 15,
+    askDescriptions: 4,
+  },
+
   /** Responsive Search Ad — Google's hard limits, do not raise. --------------- */
   rsa: {
     headlineMaxChars: 30,

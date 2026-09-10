@@ -28,7 +28,7 @@ function stripTrailingJunk(text: string): string {
 }
 
 /** Cuts at a word boundary so ad lines never end mid-word or on a filler word. */
-function smartTrim(text: string, max: number): string {
+export function smartTrim(text: string, max: number): string {
   const clean = text.replace(/\s+/g, ' ').trim();
   if (clean.length <= max) return clean;
   const cut = clean.slice(0, max);
@@ -38,7 +38,7 @@ function smartTrim(text: string, max: number): string {
 }
 
 /** Trims to fit and always ends with a full stop. */
-function sentence(text: string, max: number): string {
+export function sentence(text: string, max: number): string {
   const trimmed = smartTrim(text, max - 1);
   if (!trimmed) return '';
   return /[.!?]$/.test(trimmed) ? trimmed : `${trimmed}.`;

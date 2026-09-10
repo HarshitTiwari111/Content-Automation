@@ -1,14 +1,19 @@
 /**
- * Offline preview — no Sheet, no Google Ads, no credentials needed.
- * Shows exactly which keywords and ad copy would be generated for a sample
- * article, so the output can be checked before any account is connected.
+ * Keywords aur ad copy ka preview — Google Ads ko kuch nahi bhejta.
  *
- *   npm run preview
+ *   npm run preview                      → nakli sample article
+ *   npm run preview -- --article=GF-3232 → Sheet se asli article
  */
+import { setDefaultResultOrder } from 'node:dns';
 import { buildAdCopy } from '../src/adcopy.js';
 import { buildKeywords } from '../src/keywords.js';
 import { campaignName } from '../src/plan.js';
+import { readRows } from '../src/sheet.js';
 import type { ArticleRow } from '../src/types.js';
+
+setDefaultResultOrder('ipv4first');
+
+const wantedArticle = process.argv.find((a) => a.startsWith('--article='))?.split('=')[1];
 
 const sample: ArticleRow = {
   rowNumber: 2,
@@ -29,11 +34,22 @@ const sample: ArticleRow = {
   notes: '',
 };
 
-const { criteria, texts } = buildKeywords(sample);
-const copy = buildAdCopy(sample);
+async function pickRow(): Promise<ArticleRow> {
+  if (!wantedArticle) return sample;
 
-console.log(`\nCampaign name : ${campaignName(sample, sample.geo)}`);
-console.log(`Final URL     : ${sample.liveUrl}?utm_source=google&utm_medium=cpc&utm_campaign=${sample.articleId}`);
+  const rows = await readRows();
+  const found = rows.find((r) => r.articleId.toLowerCase() === wantedArticle.toLowerCase());
+  if (!found) throw new Error(`Article "${wantedArticle}" CONTENT_QUEUE me nahi mila.`);
+  return found;
+}
+
+async function main(): Promise<void> {
+const sampleRow = await pickRow();
+const { criteria, texts } = buildKeywords(sampleRow);
+const copy = buildAdCopy(sampleRow);
+
+console.log(`\nCampaign name : ${campaignName(sampleRow, sampleRow.geo || "US")}`);
+console.log(`Final URL     : ${sampleRow.liveUrl}?utm_source=google&utm_medium=cpc&utm_campaign=${sampleRow.articleId}`);
 
 console.log(`\nKEYWORDS (${texts.length} texts → ${criteria.length} criteria)`);
 for (const text of texts) console.log(`  - ${text}`);
@@ -50,3 +66,9 @@ for (const description of copy.descriptions) {
 
 console.log(`\nDisplay path  : /${copy.path1}${copy.path2 ? `/${copy.path2}` : ''}`);
 console.log('');
+}
+
+void main().catch((error: unknown) => {
+  console.error(`\n${error instanceof Error ? error.message : String(error)}\n`);
+  process.exitCode = 1;
+});

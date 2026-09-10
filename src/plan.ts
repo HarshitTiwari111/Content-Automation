@@ -1,5 +1,7 @@
 import { config } from '../config.js';
 import { buildAdCopy } from './adcopy.js';
+import { generateAiAdCopy } from './aicopy.js';
+import { logger } from './logger.js';
 import { buildKeywords } from './keywords.js';
 import type { ArticleRow, CampaignPlan, CampaignTemplate } from './types.js';
 import {
@@ -49,7 +51,10 @@ export async function buildPlan(
   await assertUrlReachable(row);
 
   const { criteria, negatives } = buildKeywords(row);
-  const adCopy = buildAdCopy(row);
+  // Pehle AI se koshish; na bane to article ke shabdon wala tarika.
+  const aiCopy = await generateAiAdCopy(row);
+  if (aiCopy) logger.step(`🤖 Ad copy AI se bani`);
+  const adCopy = aiCopy ?? buildAdCopy(row);
 
   return {
     row,
