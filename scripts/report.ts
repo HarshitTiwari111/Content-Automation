@@ -28,12 +28,20 @@ setDefaultResultOrder('ipv4first');
 
 interface AdsRow {
   campaign?: { id?: string; status?: string };
+  segments?: { date?: string };
   metrics?: {
     clicks?: string | number;
     impressions?: string | number;
     costMicros?: string | number;
     averageCpc?: string | number;
   };
+}
+
+/** Google "2026-09-10" deta hai; Sheet me "10/09/2026" chahiye. */
+function toSheetDate(googleDate: string | undefined): string {
+  const parts = (googleDate ?? '').split('-');
+  if (parts.length !== 3) return today();
+  return `${parts[2]}/${parts[1]}/${parts[0]}`;
 }
 
 function toUnits(micros: string | number | undefined): number {
@@ -103,7 +111,8 @@ async function main(): Promise<void> {
     for (let i = 0; i < ids.length; i += config.report.batchSize) {
       const batch = ids.slice(i, i + config.report.batchSize);
       const query =
-        'SELECT campaign.id, campaign.status, metrics.clicks, metrics.impressions, metrics.cost_micros, ' +
+        'SELECT campaign.id, campaign.status, segments.date, metrics.clicks, ' +
+        'metrics.impressions, metrics.cost_micros, ' +
         `metrics.average_cpc FROM campaign WHERE campaign.id IN (${batch.join(',')}) ` +
         `AND segments.date DURING ${config.report.dateRange}`;
 
@@ -117,48 +126,66 @@ async function main(): Promise<void> {
         continue;
       }
 
-      const byId = new Map<string, AdsRow>();
+      // Ek campaign ke kai din — har din ki apni row aati hai.
+      const byCampaign = new Map<string, AdsRow[]>();
       for (const result of results) {
-        if (result.campaign?.id) byId.set(String(result.campaign.id), result);
+        const id = result.campaign?.id ? String(result.campaign.id) : '';
+        if (!id) continue;
+        byCampaign.set(id, [...(byCampaign.get(id) ?? []), result]);
       }
 
       for (const row of accountRows) {
-        const data = byId.get(row.searchCampaignId);
-        if (!data) continue; // Is date range me is campaign ka koi data nahi.
+        const days = byCampaign.get(row.searchCampaignId) ?? [];
+        if (days.length === 0) {
+          // PAUSED campaign kabhi chali hi nahi, to Google koi din wapas nahi karta.
+          logger.step(`${row.articleId}: is range me koi data nahi (campaign chali hi nahi)`);
+          continue;
+        }
 
-        const clicks = Number(data.metrics?.clicks ?? 0);
-        const impressions = Number(data.metrics?.impressions ?? 0);
-        const spend = toUnits(data.metrics?.costMicros);
-        const cpc = toUnits(data.metrics?.averageCpc);
-        const adsStatus = (data.campaign?.status ?? '').toUpperCase();
+        let totalClicks = 0;
+        let totalSpend = 0;
+        let adsStatus = '';
 
         try {
-          // Asli reporting REPORTING tab me jaati hai (PDF section 13).
-          await upsertReportRow({
-            date: today(),
-            articleId: row.articleId,
-            liveUrl: row.liveUrl,
-            trafficSource: config.report.trafficSource,
-            impressions,
-            clicks,
-            spend,
-            cpc,
-          });
+          // PDF section 13: "Daily/weekly clicks, spend, CPC" — har din ki alag row.
+          for (const day of days) {
+            const clicks = Number(day.metrics?.clicks ?? 0);
+            const impressions = Number(day.metrics?.impressions ?? 0);
+            const spend = toUnits(day.metrics?.costMicros);
+            const cpc = toUnits(day.metrics?.averageCpc);
 
-          // CONTENT_QUEUE me ye columns hon to wahan bhi bhar dete hain.
+            totalClicks += clicks;
+            totalSpend += spend;
+            adsStatus = (day.campaign?.status ?? adsStatus).toUpperCase();
+
+            await upsertReportRow({
+              date: toSheetDate(day.segments?.date),
+              articleId: row.articleId,
+              liveUrl: row.liveUrl,
+              trafficSource: config.report.trafficSource,
+              impressions,
+              clicks,
+              spend,
+              cpc,
+            });
+            updated += 1;
+          }
+
+          // CONTENT_QUEUE me poore range ka jod — wahan ek hi row hai.
+          const totalCpc = totalClicks > 0 ? Math.round((totalSpend / totalClicks) * 100) / 100 : 0;
           await writeBack(row.rowNumber, {
-            ...(hasColumn('clicks') ? { clicks: String(clicks) } : {}),
-            ...(hasColumn('spend') ? { spend: String(spend) } : {}),
-            ...(hasColumn('cpc') ? { cpc: String(cpc) } : {}),
+            ...(hasColumn('clicks') ? { clicks: String(totalClicks) } : {}),
+            ...(hasColumn('spend') ? { spend: String(Math.round(totalSpend * 100) / 100) } : {}),
+            ...(hasColumn('cpc') ? { cpc: String(totalCpc) } : {}),
             // Google me campaign chaalu ho gayi to Sheet me LIVE dikhao
             // (PDF section 14 ka state). Warna status waisa hi rehne do.
             ...(adsStatus === 'ENABLED' ? { status: 'LIVE' } : {}),
           });
+
           logger.step(
-            `${row.articleId}: ${impressions} impr, ${clicks} clicks, ${spend} spend, ${cpc} CPC` +
+            `${row.articleId}: ${days.length} din, kul ${totalClicks} clicks, ${totalSpend} spend` +
               (adsStatus === 'ENABLED' ? '  → LIVE' : ''),
           );
-          updated += 1;
         } catch (error) {
           logger.error(
             `${row.articleId}: Sheet me likhne me problem — ` +
