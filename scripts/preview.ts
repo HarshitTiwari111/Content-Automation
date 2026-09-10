@@ -6,6 +6,7 @@
  */
 import { setDefaultResultOrder } from 'node:dns';
 import { buildAdCopy } from '../src/adcopy.js';
+import { generateAiAdCopy } from '../src/aicopy.js';
 import { buildKeywords } from '../src/keywords.js';
 import { campaignName } from '../src/plan.js';
 import { readRows } from '../src/sheet.js';
@@ -46,7 +47,10 @@ async function pickRow(): Promise<ArticleRow> {
 async function main(): Promise<void> {
 const sampleRow = await pickRow();
 const { criteria, texts } = buildKeywords(sampleRow);
-const copy = buildAdCopy(sampleRow);
+const aiCopy = await generateAiAdCopy(sampleRow);
+const copy = aiCopy ?? buildAdCopy(sampleRow);
+console.log(`
+Ad copy source: ${aiCopy ? "🤖 AI" : "article ke shabdon se (AI nahi chala)"}`);
 
 console.log(`\nCampaign name : ${campaignName(sampleRow, sampleRow.geo || "US")}`);
 console.log(`Final URL     : ${sampleRow.liveUrl}?utm_source=google&utm_medium=cpc&utm_campaign=${sampleRow.articleId}`);

@@ -116,10 +116,13 @@ export async function generateAiAdCopy(row: ArticleRow): Promise<AdCopy | null> 
         config.rsa.descriptionMaxChars,
         true,
       ),
-      path1: toPath(row.category),
+      // Google ka rule: path2 tabhi jab path1 ho. Category na ho to brand se path1.
+      path1: toPath(row.category) || toPath(row.brand),
       path2: '',
     };
-    copy.path2 = copy.path1 ? toPath(row.brand) : '';
+    if (copy.path1 && copy.path1 === toPath(row.category)) {
+      copy.path2 = toPath(row.brand);
+    }
 
     // Google ka minimum pura nahi hua to AI ka jawab bekaar hai.
     validateAdCopy(copy);
