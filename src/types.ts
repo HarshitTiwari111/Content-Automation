@@ -12,6 +12,9 @@ export interface ArticleRow {
   title: string;
   liveUrl: string;
   search: string;
+  display: string;
+  displayCampaignId: string;
+  featuredImage: string;
   geo: string;
   template: string;
   budget: string;
@@ -63,6 +66,30 @@ export interface CampaignPlan {
   keywords: KeywordCriterion[];
   negatives: string[];
   adCopy: AdCopy;
+}
+
+/** Responsive Display Ad ki copy. */
+export interface DisplayAdCopy {
+  headlines: string[];
+  longHeadline: string;
+  descriptions: string[];
+  businessName: string;
+}
+
+/** Display campaign banane ke liye poora plan. */
+export interface DisplayPlan {
+  row: ArticleRow;
+  customerId: string;
+  campaignName: string;
+  dailyBudget: number;
+  cpcBid: number;
+  geo: string;
+  geoTargetId: number;
+  languageId: number;
+  finalUrl: string;
+  finalUrlSuffix: string;
+  adCopy: DisplayAdCopy;
+  imageUrl: string;
 }
 
 /** Ids returned after the campaign is created. */

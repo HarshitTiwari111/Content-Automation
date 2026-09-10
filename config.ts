@@ -116,6 +116,38 @@ export const config = {
     askDescriptions: 4,
   },
 
+  /**
+   * Google Display (Phase 4 / PDF section 9) ---------------------------------
+   * Responsive Display Ad ke apne limits hain — Search se alag.
+   */
+  display: {
+    /** Campaign ke naam ka CHANNEL hissa. */
+    channel: 'DISPLAY',
+    /** PDF section 11: Display ka apna UTM. */
+    utmSuffix: 'utm_source=google&utm_medium=display&utm_campaign={article_id}',
+    rda: {
+      headlineMaxChars: 30,
+      longHeadlineMaxChars: 90,
+      descriptionMaxChars: 90,
+      businessNameMaxChars: 25,
+      minHeadlines: 1,
+      maxHeadlines: 5,
+      minDescriptions: 1,
+      maxDescriptions: 5,
+    },
+    /** Google ki image requirements — inhi naapon me crop karte hain. */
+    images: {
+      /** 1.91:1 — feed/banner wali jagah. */
+      marketing: { width: 1200, height: 628 },
+      /** 1:1 — square wali jagah. */
+      square: { width: 1200, height: 1200 },
+      /** JPEG quality; Google ki file size limit 5MB hai. */
+      quality: 80,
+      /** Image download ka time. */
+      timeoutMs: 30_000,
+    },
+  },
+
   /** Responsive Search Ad — Google's hard limits, do not raise. --------------- */
   rsa: {
     headlineMaxChars: 30,
@@ -165,6 +197,10 @@ export const config = {
       ],
       status: ['Status'],
       notes: ['Error / Notes', 'Error/Notes', 'Notes', 'Error'],
+      // Display (Phase 4) — ye columns na hon to Display wala kaam nahi chalega.
+      display: ['Display (Y/N)', 'Display Ads (Y/N)', 'Display'],
+      displayCampaignId: ['Display Campaign ID', 'Display Campaign Id'],
+      featuredImage: ['Featured Image', 'Image', 'Image URL'],
       // Phase 6 (reporting) — ye columns na hon to us hissa chhod diya jaata hai.
       clicks: ['Clicks'],
       spend: ['Spend', 'Cost'],

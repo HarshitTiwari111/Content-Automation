@@ -14,11 +14,14 @@
     "preview": "tsx scripts/preview.ts",
     "check": "tsx scripts/check-ads.ts",
     "serve": "tsx scripts/serve.ts",
-    "report": "tsx scripts/report.ts"
+    "report": "tsx scripts/report.ts",
+    "display": "tsx src/rundisplay.ts",
+    "display:dry": "tsx src/rundisplay.ts --dry"
   },
   "dependencies": {
     "dotenv": "16.4.7",
-    "googleapis": "144.0.0"
+    "googleapis": "144.0.0",
+    "sharp": "^0.35.4"
   },
   "devDependencies": {
     "@types/node": "22.10.5",

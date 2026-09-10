@@ -149,7 +149,7 @@ export async function searchAds(customerId: string, query: string): Promise<unkn
 }
 
 /** Ek mutate call. Resource name wapas karta hai. */
-async function mutate(
+export async function mutateResource(
   customerId: string,
   resource: string,
   operations: unknown[],
@@ -199,6 +199,31 @@ async function mutate(
 }
 
 /**
+ * Image ko Google Ads me asset banake uska resource name laata hai.
+ * Responsive Display Ad me image seedhe nahi ja sakti — pehle asset banti hai.
+ */
+export async function uploadImageAsset(
+  customerId: string,
+  base64Image: string,
+  name: string,
+): Promise<string> {
+  return mutateResource(
+    customerId,
+    'assets',
+    [
+      {
+        create: {
+          name,
+          type: 'IMAGE',
+          imageAsset: { data: base64Image },
+        },
+      },
+    ],
+    `Image asset (${name})`,
+  );
+}
+
+/**
  * Creates the whole Search campaign, always PAUSED:
  *   budget -> campaign -> geo/language/negatives -> ad group -> keywords -> RSA
  * In dry-run mode nothing is sent; fake ids are returned instead.
@@ -218,7 +243,7 @@ export async function createSearchCampaign(plan: CampaignPlan): Promise<Campaign
   assertAdsEnv();
 
   // 1. Daily budget (kisi aur campaign ke saath share nahi).
-  const budgetResourceName = await mutate(
+  const budgetResourceName = await mutateResource(
     plan.customerId,
     'campaignBudgets',
     [
@@ -236,7 +261,7 @@ export async function createSearchCampaign(plan: CampaignPlan): Promise<Campaign
   logger.step(`💰 Budget bana (${plan.dailyBudget}/day)`);
 
   // 2. Campaign — PAUSED, sirf Google Search network.
-  const campaignResourceName = await mutate(
+  const campaignResourceName = await mutateResource(
     plan.customerId,
     'campaigns',
     [
@@ -273,7 +298,7 @@ export async function createSearchCampaign(plan: CampaignPlan): Promise<Campaign
   // warna Sheet khaali reh jayegi aur agli run duplicate bana degi.
   try {
     // 3. GEO + language + campaign level negative keywords.
-    await mutate(
+    await mutateResource(
       plan.customerId,
       'campaignCriteria',
       [
@@ -302,7 +327,7 @@ export async function createSearchCampaign(plan: CampaignPlan): Promise<Campaign
     logger.step(`🌍 GEO ${plan.geo} + ${plan.negatives.length} negative keywords set`);
 
     // 4. Ad group — ye bhi PAUSED.
-    const adGroupResourceName = await mutate(
+    const adGroupResourceName = await mutateResource(
       plan.customerId,
       'adGroups',
       [
@@ -322,7 +347,7 @@ export async function createSearchCampaign(plan: CampaignPlan): Promise<Campaign
     logger.step('📁 Ad group bana (PAUSED)');
 
     // 5. Keywords.
-    await mutate(
+    await mutateResource(
       plan.customerId,
       'adGroupCriteria',
       plan.keywords.map((keyword) => ({
@@ -337,7 +362,7 @@ export async function createSearchCampaign(plan: CampaignPlan): Promise<Campaign
     logger.step(`🔑 ${plan.keywords.length} keywords add hue`);
 
     // 6. Responsive Search Ad.
-    await mutate(
+    await mutateResource(
       plan.customerId,
       'adGroupAds',
       [
