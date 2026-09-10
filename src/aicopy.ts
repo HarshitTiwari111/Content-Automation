@@ -3,7 +3,14 @@ import { sentence, smartTrim, validateAdCopy } from './adcopy.js';
 import { env } from './env.js';
 import { logger } from './logger.js';
 import { withRetry } from './retry.js';
+import { filterKeywordTexts } from './keywords.js';
 import type { AdCopy, ArticleRow } from './types.js';
+
+/** AI ka poora jawab — keywords + copy. */
+export interface AiPlan {
+  keywords: string[];
+  copy: AdCopy;
+}
 
 /**
  * AI se RSA ki copy (PDF section 16: "AI model/API for ... ad-copy generation").
@@ -29,22 +36,31 @@ function buildPrompt(row: ArticleRow): string {
     .filter(Boolean)
     .join('\n');
 
-  return `You write Google Ads Responsive Search Ad copy for an article landing page.
+  return `You plan a Google Ads Search campaign for an article landing page.
 
 ${facts}
 
-Write ${config.ai.askHeadlines} headlines and ${config.ai.askDescriptions} descriptions in English.
+Produce three things in English:
 
-Rules:
-- Headlines: ${config.rsa.headlineMaxChars} characters or fewer, each one distinct.
-- Descriptions: ${config.rsa.descriptionMaxChars} characters or fewer.
+1. ${config.ai.askKeywords} search keywords people would actually type on Google to find this article.
+   - ${config.keywords.minWords} to ${config.keywords.maxWords} words each, lowercase, no punctuation.
+   - Match the article's real subject and intent. No brand names of other companies.
+   - Do not include the publisher's own site name.
+
+2. ${config.ai.askHeadlines} headlines, ${config.rsa.headlineMaxChars} characters or fewer, each one distinct.
+   - Start each headline with a capital letter (normal sentence case, not lowercase).
+
+3. ${config.ai.askDescriptions} descriptions, ${config.rsa.descriptionMaxChars} characters or fewer.
+   - Normal sentence case, ending with a full stop.
+
+Rules for all of it:
 - Stay true to the article. Do not invent prices, discounts, ratings, guarantees or statistics.
 - No superlatives you cannot back up ("the best", "number 1", "cheapest").
 - No phone numbers, no ALL CAPS words, no more than one exclamation mark overall.
 - Vary the angle: what the reader learns, who it helps, what problem it solves.
 
 Reply with JSON only, in this exact shape:
-{"headlines": ["..."], "descriptions": ["..."]}`;
+{"keywords": ["..."], "headlines": ["..."], "descriptions": ["..."]}`;
 }
 
 /** AI ki lines ko Google ki limit ke andar laata hai aur kachra hata deta hai. */
@@ -56,8 +72,12 @@ function cleanLines(lines: unknown, max: number, limit: number, asSentence: bool
     if (typeof raw !== 'string') continue;
     const trimmed = asSentence ? sentence(raw, limit) : smartTrim(raw, limit);
     if (!trimmed || trimmed.length > limit) continue;
-    if (out.some((existing) => existing.toLowerCase() === trimmed.toLowerCase())) continue;
-    out.push(trimmed);
+    // AI kabhi-kabhi poori line lowercase bhej deta hai — pehla akshar bada kar dete hain.
+    const fixed = trimmed[0] === trimmed[0]?.toLowerCase()
+      ? trimmed[0]!.toUpperCase() + trimmed.slice(1)
+      : trimmed;
+    if (out.some((existing) => existing.toLowerCase() === fixed.toLowerCase())) continue;
+    out.push(fixed);
     if (out.length >= max) break;
   }
   return out;
@@ -71,7 +91,7 @@ function toPath(value: string): string {
 /**
  * AI se copy banwata hai. Na ban paye to null — caller purana tarika use karega.
  */
-export async function generateAiAdCopy(row: ArticleRow): Promise<AdCopy | null> {
+export async function generateAiPlan(row: ArticleRow): Promise<AiPlan | null> {
   if (!config.ai.enabled || !env.openAi.apiKey) return null;
 
   try {
@@ -101,7 +121,11 @@ export async function generateAiAdCopy(row: ArticleRow): Promise<AdCopy | null> 
     const content = parsed.choices?.[0]?.message?.content;
     if (!content) return null;
 
-    const json = JSON.parse(content) as { headlines?: unknown; descriptions?: unknown };
+    const json = JSON.parse(content) as {
+      keywords?: unknown;
+      headlines?: unknown;
+      descriptions?: unknown;
+    };
 
     const copy: AdCopy = {
       headlines: cleanLines(
@@ -126,7 +150,12 @@ export async function generateAiAdCopy(row: ArticleRow): Promise<AdCopy | null> 
 
     // Google ka minimum pura nahi hua to AI ka jawab bekaar hai.
     validateAdCopy(copy);
-    return copy;
+
+    const keywords = Array.isArray(json.keywords)
+      ? filterKeywordTexts(row, json.keywords.filter((k): k is string => typeof k === 'string'))
+      : [];
+
+    return { keywords, copy };
   } catch (error) {
     logger.warn(
       `AI ad copy nahi bani (${error instanceof Error ? error.message : String(error)}) — ` +

@@ -6,8 +6,8 @@
  */
 import { setDefaultResultOrder } from 'node:dns';
 import { buildAdCopy } from '../src/adcopy.js';
-import { generateAiAdCopy } from '../src/aicopy.js';
-import { buildKeywords } from '../src/keywords.js';
+import { generateAiPlan } from '../src/aicopy.js';
+import { buildKeywords, toCriteria } from '../src/keywords.js';
 import { campaignName } from '../src/plan.js';
 import { readRows } from '../src/sheet.js';
 import type { ArticleRow } from '../src/types.js';
@@ -46,11 +46,13 @@ async function pickRow(): Promise<ArticleRow> {
 
 async function main(): Promise<void> {
 const sampleRow = await pickRow();
-const { criteria, texts } = buildKeywords(sampleRow);
-const aiCopy = await generateAiAdCopy(sampleRow);
-const copy = aiCopy ?? buildAdCopy(sampleRow);
+const ai = await generateAiPlan(sampleRow);
+const fallback = buildKeywords(sampleRow);
+const texts = ai && ai.keywords.length >= 2 ? ai.keywords : fallback.texts;
+const criteria = ai && ai.keywords.length >= 2 ? toCriteria(texts) : fallback.criteria;
+const copy = ai?.copy ?? buildAdCopy(sampleRow);
 console.log(`
-Ad copy source: ${aiCopy ? "🤖 AI" : "article ke shabdon se (AI nahi chala)"}`);
+Ad copy source: ${ai ? "🤖 AI" : "article ke shabdon se (AI nahi chala)"}`);
 
 console.log(`\nCampaign name : ${campaignName(sampleRow, sampleRow.geo || "US")}`);
 console.log(`Final URL     : ${sampleRow.liveUrl}?utm_source=google&utm_medium=cpc&utm_campaign=${sampleRow.articleId}`);

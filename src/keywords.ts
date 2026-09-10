@@ -126,6 +126,25 @@ export function negativeKeywords(row: ArticleRow): string[] {
   );
 }
 
+/**
+ * AI se aaye keywords ko saaf karta hai — wahi rules jo apne banaye keywords
+ * pe lagte hain (lambai, banned words, duplicate).
+ */
+export function filterKeywordTexts(row: ArticleRow, texts: string[]): string[] {
+  const own = ownWords(row);
+  const seen = new Set<string>();
+  const out: string[] = [];
+
+  for (const raw of texts) {
+    const keyword = clean(raw);
+    if (!keyword || seen.has(keyword) || !isAllowed(keyword, own)) continue;
+    seen.add(keyword);
+    out.push(keyword);
+    if (out.length >= config.keywords.maxKeywords) break;
+  }
+  return out;
+}
+
 /** Throws when an article cannot produce enough usable keywords. */
 export function buildKeywords(row: ArticleRow): {
   criteria: KeywordCriterion[];

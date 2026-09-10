@@ -66,9 +66,9 @@ export const config = {
      * Article ke shabdon ke aage lagne wale shabd (best running shoes).
      * Khaali kar do to sirf article ke apne shabdon se keywords banenge.
      */
-    prefixes: ['best', 'top'],
+    prefixes: [] as string[],
     /** Article ke shabdon ke peeche lagne wale shabd (running shoes guide). */
-    modifiers: ['guide', 'tips', 'checklist', 'ideas', 'options', 'comparison'],
+    modifiers: [] as string[],
     /** A keyword containing any of these words is dropped. */
     bannedWords: [
       'free',
@@ -111,6 +111,7 @@ export const config = {
     /** Ek article pe ek hi call — kharcha kam rakhne ke liye. */
     timeoutMs: 30_000,
     /** AI kitni lines maange. Google ki limit config.rsa se aati hai. */
+    askKeywords: 15,
     askHeadlines: 15,
     askDescriptions: 4,
   },

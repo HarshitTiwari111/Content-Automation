@@ -1,8 +1,8 @@
 import { config } from '../config.js';
 import { buildAdCopy } from './adcopy.js';
-import { generateAiAdCopy } from './aicopy.js';
+import { generateAiPlan } from './aicopy.js';
 import { logger } from './logger.js';
-import { buildKeywords } from './keywords.js';
+import { buildKeywords, negativeKeywords, toCriteria } from './keywords.js';
 import type { ArticleRow, CampaignPlan, CampaignTemplate } from './types.js';
 import {
   assertRequiredFields,
@@ -50,11 +50,21 @@ export async function buildPlan(
 
   await assertUrlReachable(row);
 
-  const { criteria, negatives } = buildKeywords(row);
-  // Pehle AI se koshish; na bane to article ke shabdon wala tarika.
-  const aiCopy = await generateAiAdCopy(row);
-  if (aiCopy) logger.step(`🤖 Ad copy AI se bani`);
-  const adCopy = aiCopy ?? buildAdCopy(row);
+  // Pehle AI se koshish — keywords aur copy dono ek hi call me.
+  const ai = await generateAiPlan(row);
+
+  let criteria;
+  let negatives;
+  if (ai && ai.keywords.length >= 2) {
+    criteria = toCriteria(ai.keywords);
+    negatives = negativeKeywords(row);
+    logger.step('🤖 Keywords aur ad copy AI se bane');
+  } else {
+    ({ criteria, negatives } = buildKeywords(row));
+    if (ai) logger.step('🤖 Ad copy AI se bani (keywords article se)');
+  }
+
+  const adCopy = ai?.copy ?? buildAdCopy(row);
 
   return {
     row,
