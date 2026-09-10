@@ -420,6 +420,11 @@ export async function readCreatedCampaigns(): Promise<Map<string, string>> {
   return created;
 }
 
+/** CONTENT_QUEUE me ye column maujood hai ya nahi (readRows ke baad hi sahi jawab dega). */
+export function hasColumn(field: string): boolean {
+  return columnIndex(field) !== -1;
+}
+
 /**
  * Live chalane se PEHLE check karta hai ki CONTENT_QUEUE me campaign ID
  * likhne ki jagah hai ya nahi. Warna campaign ban jayegi aur uska ID kahin

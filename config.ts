@@ -165,7 +165,22 @@ export const config = {
       ],
       status: ['Status'],
       notes: ['Error / Notes', 'Error/Notes', 'Notes', 'Error'],
+      // Phase 6 (reporting) — ye columns na hon to us hissa chhod diya jaata hai.
+      clicks: ['Clicks'],
+      spend: ['Spend', 'Cost'],
+      cpc: ['CPC', 'Avg CPC', 'Average CPC'],
     } as Record<string, string[]>,
+  },
+
+  /**
+   * Phase 6 — reporting. Google Ads se clicks/spend/CPC laake CONTENT_QUEUE
+   * me likhte hain. Ye sirf padhta hai, koi campaign nahi badalta.
+   */
+  report: {
+    /** GAQL date range: LAST_7_DAYS, LAST_30_DAYS, ALL_TIME... */
+    dateRange: 'LAST_30_DAYS',
+    /** Ek query me itne campaign ids. */
+    batchSize: 200,
   },
 
   /**

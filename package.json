@@ -13,7 +13,8 @@
     "typecheck": "tsc --noEmit",
     "preview": "tsx scripts/preview.ts",
     "check": "tsx scripts/check-ads.ts",
-    "serve": "tsx scripts/serve.ts"
+    "serve": "tsx scripts/serve.ts",
+    "report": "tsx scripts/report.ts"
   },
   "dependencies": {
     "dotenv": "16.4.7",
