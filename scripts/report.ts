@@ -1,16 +1,16 @@
 /**
- * Phase 6 (Reporting) ka Search wala hissa.
+ * Phase 6 (Reporting) — Search aur Display dono.
  *
  *   npm run report
  *
- * Google Ads se har Search campaign ke clicks, spend aur CPC laake
- * CONTENT_QUEUE ki usi row me likh deta hai. Koi campaign banata ya
- * badalta nahi — sirf padhta hai.
+ * Google Ads se har campaign ke clicks, spend, CPC aur status laake
+ * REPORTING tab me din-wise likhta hai, aur CONTENT_QUEUE me jod.
+ * Koi campaign banata ya badalta nahi — sirf padhta hai.
  */
 import { setDefaultResultOrder } from 'node:dns';
 import { config } from '../config.js';
 import { assertSheetEnv, env } from '../src/env.js';
-import { searchAds } from '../src/googleads.js';
+import { assertAdsAccess, searchAds } from '../src/googleads.js';
 import { logger } from '../src/logger.js';
 import {
   hasColumn,
@@ -37,6 +37,28 @@ interface AdsRow {
   };
 }
 
+/** Ek article ki ek channel wali campaign. */
+interface Target {
+  row: ArticleRow;
+  campaignId: string;
+  source: string;
+}
+
+/** CONTENT_QUEUE ki ek row ka jod (Search + Display milake). */
+interface RowTotal {
+  row: ArticleRow;
+  clicks: number;
+  spend: number;
+  hasData: boolean;
+  live: boolean;
+}
+
+/** PDF ke channels — har ek ka apna ID column aur Traffic Source naam. */
+const CHANNELS = [
+  { field: 'searchCampaignId', source: config.report.trafficSource },
+  { field: 'displayCampaignId', source: config.report.displayTrafficSource },
+] as const;
+
 /** Google "2026-09-10" deta hai; Sheet me "10/09/2026" chahiye. */
 function toSheetDate(googleDate: string | undefined): string {
   const parts = (googleDate ?? '').split('-');
@@ -47,6 +69,11 @@ function toSheetDate(googleDate: string | undefined): string {
 function toUnits(micros: string | number | undefined): number {
   const n = Number(micros ?? 0);
   return Number.isFinite(n) ? Math.round((n / 1_000_000) * 100) / 100 : 0;
+}
+
+/** Google ka status → Sheet ka state (PDF section 14: ENABLED = LIVE). */
+function toState(status: string): string {
+  return status === 'ENABLED' ? 'LIVE' : status;
 }
 
 /** Row ka Google Ads account — wahi logic jo campaign banate waqt lagta hai. */
@@ -70,7 +97,7 @@ function resolveCustomerId(
 async function main(): Promise<void> {
   logger.blank();
   logger.info('═══════════════════════════════════════════════');
-  logger.info('  Phase 6 — Search campaigns ka data Sheet me');
+  logger.info('  Phase 6 — Search + Display campaigns ka data Sheet me');
   logger.info(`  Date range: ${config.report.dateRange}`);
   logger.info('═══════════════════════════════════════════════');
 
@@ -80,45 +107,70 @@ async function main(): Promise<void> {
   const siteIds = await readSiteIds();
   const accountMap = await readAccountMap();
 
-  const withCampaign = rows.filter((row) => row.searchCampaignId !== '');
-  logger.info(`📄 ${withCampaign.length} rows me Search Campaign ID mila`);
+  const targets: Target[] = [];
+  for (const row of rows) {
+    for (const channel of CHANNELS) {
+      const campaignId = row[channel.field];
+      if (/^\d+$/.test(campaignId)) targets.push({ row, campaignId, source: channel.source });
+    }
+  }
+  logger.info(`📄 ${targets.length} campaign IDs mile (Search + Display)`);
 
-  if (withCampaign.length === 0) {
+  if (targets.length === 0) {
     logger.info('Kuch karne ko nahi hai.');
     return;
   }
 
   // Account ke hisaab se baant lo — har account ki apni query jaati hai.
-  const byAccount = new Map<string, ArticleRow[]>();
-  for (const row of withCampaign) {
-    const customerId = resolveCustomerId(row, accountMap, siteIds);
+  const byAccount = new Map<string, Target[]>();
+  for (const target of targets) {
+    const customerId = resolveCustomerId(target.row, accountMap, siteIds);
     if (!customerId) {
-      logger.warn(`${row.articleId}: account nahi mila, chhod diya.`);
+      logger.warn(`${target.row.articleId}: account nahi mila, chhod diya.`);
       continue;
     }
-    byAccount.set(customerId, [...(byAccount.get(customerId) ?? []), row]);
+    byAccount.set(customerId, [...(byAccount.get(customerId) ?? []), target]);
   }
 
+  await assertAdsAccess([...byAccount.keys()]);
+
+  const totals = new Map<number, RowTotal>();
   let updated = 0;
   let failed = 0;
 
-  for (const [customerId, accountRows] of byAccount) {
+  for (const [customerId, accountTargets] of byAccount) {
     logger.blank();
-    logger.info(`🏢 Account ${customerId} — ${accountRows.length} campaigns`);
+    logger.info(`🏢 Account ${customerId} — ${accountTargets.length} campaigns`);
 
-    const ids = accountRows.map((row) => row.searchCampaignId).filter(Boolean);
+    for (let i = 0; i < accountTargets.length; i += config.report.batchSize) {
+      const batch = accountTargets.slice(i, i + config.report.batchSize);
+      const ids = [...new Set(batch.map((t) => t.campaignId))].join(',');
 
-    for (let i = 0; i < ids.length; i += config.report.batchSize) {
-      const batch = ids.slice(i, i + config.report.batchSize);
-      const query =
-        'SELECT campaign.id, campaign.status, segments.date, metrics.clicks, ' +
-        'metrics.impressions, metrics.cost_micros, ' +
-        `metrics.average_cpc FROM campaign WHERE campaign.id IN (${batch.join(',')}) ` +
-        `AND segments.date DURING ${config.report.dateRange}`;
+      // Status alag se — 0 clicks wali campaign ka bhi state pata chale.
+      const statuses = new Map<string, string>();
+      try {
+        const response = (await searchAds(
+          customerId,
+          `SELECT campaign.id, campaign.status FROM campaign WHERE campaign.id IN (${ids})`,
+        )) as { results?: AdsRow[] };
+        for (const result of response.results ?? []) {
+          const id = result.campaign?.id ? String(result.campaign.id) : '';
+          const status = String(result.campaign?.status ?? '').toUpperCase();
+          if (id && status) statuses.set(id, status);
+        }
+      } catch (error) {
+        logger.warn(`Status nahi mila: ${error instanceof Error ? error.message : String(error)}`);
+      }
 
       let results: AdsRow[];
       try {
-        const response = (await searchAds(customerId, query)) as { results?: AdsRow[] };
+        const response = (await searchAds(
+          customerId,
+          'SELECT campaign.id, campaign.status, segments.date, metrics.clicks, ' +
+            'metrics.impressions, metrics.cost_micros, metrics.average_cpc ' +
+            `FROM campaign WHERE campaign.id IN (${ids}) ` +
+            `AND segments.date DURING ${config.report.dateRange}`,
+        )) as { results?: AdsRow[] };
         results = response.results ?? [];
       } catch (error) {
         logger.error(`Data nahi mila: ${error instanceof Error ? error.message : String(error)}`);
@@ -130,61 +182,62 @@ async function main(): Promise<void> {
       const byCampaign = new Map<string, AdsRow[]>();
       for (const result of results) {
         const id = result.campaign?.id ? String(result.campaign.id) : '';
-        if (!id) continue;
-        byCampaign.set(id, [...(byCampaign.get(id) ?? []), result]);
+        if (id) byCampaign.set(id, [...(byCampaign.get(id) ?? []), result]);
       }
 
-      for (const row of accountRows) {
-        const days = byCampaign.get(row.searchCampaignId) ?? [];
+      for (const target of batch) {
+        const { row, campaignId, source } = target;
+        const status = statuses.get(campaignId) ?? '';
+        const days = byCampaign.get(campaignId) ?? [];
+
+        const total = totals.get(row.rowNumber) ?? {
+          row,
+          clicks: 0,
+          spend: 0,
+          hasData: false,
+          live: false,
+        };
+        if (status === 'ENABLED') total.live = true;
+        totals.set(row.rowNumber, total);
+
         if (days.length === 0) {
-          // PAUSED campaign kabhi chali hi nahi, to Google koi din wapas nahi karta.
-          logger.step(`${row.articleId}: is range me koi data nahi (campaign chali hi nahi)`);
+          logger.step(
+            `${row.articleId} (${source}): is range me koi data nahi` +
+              (status ? ` — state ${toState(status)}` : ''),
+          );
           continue;
         }
 
-        let totalClicks = 0;
-        let totalSpend = 0;
-        let adsStatus = '';
-
+        let clicksSum = 0;
+        let spendSum = 0;
         try {
-          // PDF section 13: "Daily/weekly clicks, spend, CPC" — har din ki alag row.
+          // PDF section 13: "Daily/weekly clicks, spend, CPC and campaign state".
           for (const day of days) {
             const clicks = Number(day.metrics?.clicks ?? 0);
-            const impressions = Number(day.metrics?.impressions ?? 0);
             const spend = toUnits(day.metrics?.costMicros);
-            const cpc = toUnits(day.metrics?.averageCpc);
-
-            totalClicks += clicks;
-            totalSpend += spend;
-            adsStatus = (day.campaign?.status ?? adsStatus).toUpperCase();
+            clicksSum += clicks;
+            spendSum += spend;
 
             await upsertReportRow({
               date: toSheetDate(day.segments?.date),
               articleId: row.articleId,
               liveUrl: row.liveUrl,
-              trafficSource: config.report.trafficSource,
-              impressions,
+              trafficSource: source,
+              impressions: Number(day.metrics?.impressions ?? 0),
               clicks,
               spend,
-              cpc,
+              cpc: toUnits(day.metrics?.averageCpc),
+              campaignState: toState(status || String(day.campaign?.status ?? '').toUpperCase()),
             });
             updated += 1;
           }
 
-          // CONTENT_QUEUE me poore range ka jod — wahan ek hi row hai.
-          const totalCpc = totalClicks > 0 ? Math.round((totalSpend / totalClicks) * 100) / 100 : 0;
-          await writeBack(row.rowNumber, {
-            ...(hasColumn('clicks') ? { clicks: String(totalClicks) } : {}),
-            ...(hasColumn('spend') ? { spend: String(Math.round(totalSpend * 100) / 100) } : {}),
-            ...(hasColumn('cpc') ? { cpc: String(totalCpc) } : {}),
-            // Google me campaign chaalu ho gayi to Sheet me LIVE dikhao
-            // (PDF section 14 ka state). Warna status waisa hi rehne do.
-            ...(adsStatus === 'ENABLED' ? { status: 'LIVE' } : {}),
-          });
-
+          total.clicks += clicksSum;
+          total.spend += spendSum;
+          total.hasData = true;
           logger.step(
-            `${row.articleId}: ${days.length} din, kul ${totalClicks} clicks, ${totalSpend} spend` +
-              (adsStatus === 'ENABLED' ? '  → LIVE' : ''),
+            `${row.articleId} (${source}): ${days.length} din, ${clicksSum} clicks, ` +
+              `${Math.round(spendSum * 100) / 100} spend — state ${toState(status) || '?'}`,
           );
         } catch (error) {
           logger.error(
@@ -197,9 +250,33 @@ async function main(): Promise<void> {
     }
   }
 
+  // CONTENT_QUEUE me poore range ka jod — wahan har article ki ek hi row hai.
+  for (const total of totals.values()) {
+    const spend = Math.round(total.spend * 100) / 100;
+    const cpc = total.clicks > 0 ? Math.round((total.spend / total.clicks) * 100) / 100 : 0;
+    const updates: Record<string, string> = {
+      ...(total.hasData && hasColumn('clicks') ? { clicks: String(total.clicks) } : {}),
+      ...(total.hasData && hasColumn('spend') ? { spend: String(spend) } : {}),
+      ...(total.hasData && hasColumn('cpc') ? { cpc: String(cpc) } : {}),
+      // Google me koi bhi channel chaalu ho to Sheet me LIVE (PDF section 14).
+      ...(total.live ? { status: 'LIVE' } : {}),
+    };
+    if (Object.keys(updates).length === 0) continue;
+
+    try {
+      await writeBack(total.row.rowNumber, updates);
+    } catch (error) {
+      logger.error(
+        `${total.row.articleId}: ${env.sheetTab} me likhne me problem — ` +
+          (error instanceof Error ? error.message : String(error)),
+      );
+      failed += 1;
+    }
+  }
+
   logger.blank();
   logger.info('───────────────── SUMMARY ─────────────────');
-  logger.info(`✅ ${updated} rows update hui`);
+  logger.info(`✅ ${updated} REPORTING rows update hui`);
   logger.info(`❌ ${failed} fail`);
   logger.blank();
 }

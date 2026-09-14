@@ -1,16 +1,10 @@
-# PDF section 16 ka "Scheduler/automation host".
-# Har 15 minute me Sheet dekhta hai aur jahan Search Ads (Y/N) = YES hai
-# wahan PAUSED Search campaign bana deta hai.
-#
-# Kisi ko terminal chhune ki zarurat nahi. Chahiye to GitHub ke
-# Actions tab se "Run workflow" dabake haath se bhi chala sakte ho.
+# Phase 4 — Sheet me jahan Display (Y/N) = YES hai, wahan PAUSED Display
+# campaign banata hai. GitHub ke Actions tab se "Run workflow" dabake chalao.
 
-name: Create Search campaigns
+name: Create Display campaigns
 
 on:
-  # NOTE: automatic schedule jaanbujh ke band hai — abhi faisla nahi hua ki
-  # timer se chalega ya Sheet ke button se. Chalu karna ho to neeche wali
-  # do line se # hata do.
+  # NOTE: automatic schedule jaanbujh ke band hai — faisla hone par chalu karna.
   #
   # schedule:
   #   - cron: '*/15 * * * *'
@@ -23,7 +17,7 @@ on:
 
 # Do run ek saath na chalein — warna duplicate ban sakti hain.
 concurrency:
-  group: create-search-campaigns
+  group: create-display-campaigns
   cancel-in-progress: false
 
 jobs:
@@ -41,7 +35,7 @@ jobs:
 
       - run: npm ci
 
-      - name: Create campaigns (hamesha PAUSED)
+      - name: Create Display campaigns (hamesha PAUSED)
         env:
           SPREADSHEET_ID: ${{ secrets.SPREADSHEET_ID }}
           SHEET_TAB: ${{ secrets.SHEET_TAB }}
@@ -53,9 +47,7 @@ jobs:
           GOOGLE_ADS_CUSTOMER_ID: ${{ secrets.GOOGLE_ADS_CUSTOMER_ID }}
           GOOGLE_ADS_LOGIN_CUSTOMER_ID: ${{ secrets.GOOGLE_ADS_LOGIN_CUSTOMER_ID }}
           OPENAI_API_KEY: ${{ secrets.OPENAI_API_KEY }}
-          # Kill switch: GitHub → Settings → Secrets and variables → Actions →
-          # Variables me PAID_TRAFFIC_KILL_SWITCH = true. Tab ye run nayi campaign
-          # nahi banata, balki saari chaalu campaigns PAUSE kar deta hai.
+          # Kill switch: Settings → Secrets and variables → Actions → Variables
           PAID_TRAFFIC_KILL_SWITCH: ${{ vars.PAID_TRAFFIC_KILL_SWITCH }}
           DRY_RUN: 'false'
-        run: npm run create -- --live --limit=${{ github.event.inputs.limit || 5 }}
+        run: npm run display -- --live --limit=${{ github.event.inputs.limit || 5 }}

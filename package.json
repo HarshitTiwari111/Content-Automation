@@ -13,10 +13,11 @@
     "typecheck": "tsc --noEmit",
     "preview": "tsx scripts/preview.ts",
     "check": "tsx scripts/check-ads.ts",
-    "serve": "tsx scripts/serve.ts",
     "report": "tsx scripts/report.ts",
     "display": "tsx src/rundisplay.ts",
-    "display:dry": "tsx src/rundisplay.ts --dry"
+    "display:dry": "tsx src/rundisplay.ts --dry",
+    "scheduler": "tsx scripts/scheduler.ts",
+    "kill": "tsx scripts/kill.ts"
   },
   "dependencies": {
     "dotenv": "16.4.7",

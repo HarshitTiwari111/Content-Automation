@@ -5,16 +5,32 @@
  */
 
 export const config = {
+  /**
+   * Admin-only Kill Switch for all automated paid traffic (PDF Section 16).
+   * Set PAID_TRAFFIC_KILL_SWITCH=true in .env to halt all campaign creation instantly.
+   */
+  killSwitch: {
+    enabled: process.env.PAID_TRAFFIC_KILL_SWITCH === 'true' || process.env.KILL_SWITCH === 'true',
+  },
+
   // NOTE: campaign/ad group/ad status is NOT configurable on purpose.
   // It is hardcoded to PAUSED inside src/googleads.ts so that no setting,
   // Sheet value or typo can ever create a spending campaign.
 
   /** Money / bidding -------------------------------------------------------- */
   budget: {
-    /** Used when the Sheet row has no Budget value. Account currency, per day. */
-    defaultDailyBudget: 300,
+    /** Used when the Sheet row has no Budget value. 0 means Budget is strictly required. */
+    defaultDailyBudget: 0,
     /** Row budget above this is rejected — protects against a typo in the Sheet. */
     maxDailyBudget: 1000,
+    /**
+     * PDF section 14/16: account-level cap. Ek Google Ads account ki saari
+     * (ENABLED + PAUSED) campaigns ka kul daily budget isse upar nahi jayega.
+     * 0 = check band.
+     */
+    maxAccountDailyBudget: 5000,
+    /** Kisi account ki alag limit ho to yahan: { '4372007893': 2000 } */
+    accountDailyBudgetCaps: {} as Record<string, number>,
   },
   /** Default max CPC bid for the ad group (account currency). */
   defaultCpcBid: 15,
@@ -216,6 +232,7 @@ export const config = {
     tab: 'REPORTING',
     /** Traffic Source column me yahi likha jaata hai. */
     trafficSource: 'Google Search',
+    displayTrafficSource: 'Google Display',
     /** GAQL date range: LAST_7_DAYS, LAST_30_DAYS, ALL_TIME... */
     dateRange: 'LAST_30_DAYS',
     /** Ek query me itne campaign ids. */
@@ -229,6 +246,7 @@ export const config = {
       clicks: ['Clicks'],
       spend: ['Spend', 'Cost'],
       cpc: ['CPC', 'Avg CPC', 'Average CPC'],
+      campaignState: ['Status', 'Campaign Status', 'Campaign State'],
       lastSync: ['Last Sync', 'Last Synced', 'Synced'],
     } as Record<string, string[]>,
   },

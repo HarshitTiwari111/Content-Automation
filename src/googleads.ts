@@ -148,6 +148,60 @@ export async function searchAds(customerId: string, query: string): Promise<unkn
   }
 }
 
+const accessChecks = new Map<string, Promise<string>>();
+
+/**
+ * PDF section 14: "Account credentials/token are valid".
+ * Account pe ek chhoti read query chalata hai. '' = theek, warna error text.
+ * Ek account ek hi baar check hota hai.
+ */
+export function checkAdsAccess(customerId: string): Promise<string> {
+  let check = accessChecks.get(customerId);
+  if (!check) {
+    check = searchAds(customerId, 'SELECT customer.id FROM customer LIMIT 1').then(
+      () => '',
+      (error: unknown) => describeAdsError(error),
+    );
+    accessChecks.set(customerId, check);
+  }
+  return check;
+}
+
+/**
+ * Run shuru hone se pehle token aur har account ka access dekhta hai.
+ * Ek bhi account na khule to run wahin rok deta hai — har row alag-alag
+ * fail karne se behtar.
+ */
+export async function assertAdsAccess(customerIds: string[]): Promise<void> {
+  const unique = [...new Set(customerIds.filter((id) => /^\d+$/.test(id)))];
+  if (unique.length === 0) return;
+
+  let failed = 0;
+  for (const id of unique) {
+    const error = await checkAdsAccess(id);
+    if (error) {
+      failed += 1;
+      logger.error(`Account ${id}: Google Ads access nahi mila — ${error}`);
+    } else {
+      logger.info(`✅ Account ${id}: token aur access theek`);
+    }
+  }
+
+  if (failed === unique.length) {
+    throw new Error(
+      'Google Ads token ya account access galat hai — kuch nahi kiya gaya. ' +
+        '.env me GOOGLE_ADS_REFRESH_TOKEN aur GOOGLE_ADS_LOGIN_CUSTOMER_ID check karo.',
+    );
+  }
+}
+
+/** Template ke Device rule wale criteria (band devices pe bid -100%). */
+export function deviceCriteria(campaignResourceName: string, excludedDevices: string[]): unknown[] {
+  return excludedDevices.map((type) => ({
+    create: { campaign: campaignResourceName, device: { type }, bidModifier: 0 },
+  }));
+}
+
 /** Ek mutate call. Resource name wapas karta hai. */
 export async function mutateResource(
   customerId: string,
@@ -229,6 +283,10 @@ export async function uploadImageAsset(
  * In dry-run mode nothing is sent; fake ids are returned instead.
  */
 export async function createSearchCampaign(plan: CampaignPlan): Promise<CampaignResult> {
+  if (env.killSwitch) {
+    throw new Error('🛑 ADMIN KILL SWITCH IS ACTIVE: Paid traffic creation is globally blocked (PAID_TRAFFIC_KILL_SWITCH=true).');
+  }
+
   if (env.dryRun) {
     logger.step('🧪 DRY RUN — Google Ads ko kuch nahi bheja gaya');
     return {
@@ -321,10 +379,14 @@ export async function createSearchCampaign(plan: CampaignPlan): Promise<Campaign
             keyword: { text, matchType: 'BROAD' },
           },
         })),
+        ...deviceCriteria(campaignResourceName, plan.excludedDevices),
       ],
-      'GEO/language/negatives',
+      'GEO/language/negatives/device',
     );
     logger.step(`🌍 GEO ${plan.geo} + ${plan.negatives.length} negative keywords set`);
+    if (plan.excludedDevices.length > 0) {
+      logger.step(`📱 In devices pe ad band: ${plan.excludedDevices.join(', ')}`);
+    }
 
     // 4. Ad group — ye bhi PAUSED.
     const adGroupResourceName = await mutateResource(
@@ -346,20 +408,62 @@ export async function createSearchCampaign(plan: CampaignPlan): Promise<Campaign
     const adGroupId = idFromResourceName(adGroupResourceName);
     logger.step('📁 Ad group bana (PAUSED)');
 
-    // 5. Keywords.
-    await mutateResource(
-      plan.customerId,
-      'adGroupCriteria',
-      plan.keywords.map((keyword) => ({
-        create: {
-          adGroup: adGroupResourceName,
-          status: 'ENABLED',
-          keyword: { text: keyword.text, matchType: keyword.matchType },
-        },
-      })),
-      'Keywords',
-    );
-    logger.step(`🔑 ${plan.keywords.length} keywords add hue`);
+    // 5. Keywords (with policy error fallback so policy-safe keywords get added).
+    let keywordCount = plan.keywords.length;
+    try {
+      await mutateResource(
+        plan.customerId,
+        'adGroupCriteria',
+        plan.keywords.map((keyword) => ({
+          create: {
+            adGroup: adGroupResourceName,
+            status: 'ENABLED',
+            keyword: { text: keyword.text, matchType: keyword.matchType },
+          },
+        })),
+        'Keywords',
+      );
+      logger.step(`🔑 ${plan.keywords.length} keywords add hue`);
+    } catch (kwError) {
+      const errText = describeAdsError(kwError);
+      if (errText.includes('POLICY_ERROR') || errText.includes('policy')) {
+        let addedCount = 0;
+        for (const keyword of plan.keywords) {
+          try {
+            await mutateResource(
+              plan.customerId,
+              'adGroupCriteria',
+              [
+                {
+                  create: {
+                    adGroup: adGroupResourceName,
+                    status: 'ENABLED',
+                    keyword: { text: keyword.text, matchType: keyword.matchType },
+                  },
+                },
+              ],
+              `Keyword (${keyword.text})`,
+            );
+            addedCount++;
+          } catch (oneError) {
+            // Sirf policy wala keyword chhodna hai; koi aur error ho to rukna hai.
+            const oneText = describeAdsError(oneError);
+            if (!oneText.includes('POLICY_ERROR') && !oneText.includes('policy')) throw oneError;
+          }
+        }
+        // PDF section 14: "Required ad assets/keywords exist" — bina keyword ki
+        // Search campaign kaam ki nahi.
+        if (addedCount === 0) {
+          throw new Error(
+            'Saare keywords Google policy me reject ho gaye — bina keyword ki Search campaign nahi chal sakti.',
+          );
+        }
+        keywordCount = addedCount;
+        logger.step(`🔑 ${addedCount}/${plan.keywords.length} policy-safe keywords add hue (policy restriction wale keywords skip hue)`);
+      } else {
+        throw kwError;
+      }
+    }
 
     // 6. Responsive Search Ad.
     await mutateResource(
@@ -390,7 +494,7 @@ export async function createSearchCampaign(plan: CampaignPlan): Promise<Campaign
       campaignId,
       campaignResourceName,
       adGroupId,
-      keywordCount: plan.keywords.length,
+      keywordCount,
       dryRun: false,
     };
   } catch (error) {

@@ -3,7 +3,14 @@ import { config } from '../config.js';
 import { createDisplayCampaign } from './displayads.js';
 import { buildDisplayPlan } from './displayplan.js';
 import { assertSheetEnv, cli, env } from './env.js';
-import { describeAdsError, PartialCampaignError } from './googleads.js';
+import {
+  assertAdsAccess,
+  checkAdsAccess,
+  describeAdsError,
+  PartialCampaignError,
+} from './googleads.js';
+import { assertAccountBudget } from './validate.js';
+import { pauseAllCampaigns } from './killswitch.js';
 import { logger } from './logger.js';
 import {
   appendErrorLog,
@@ -84,8 +91,19 @@ async function processRow(
       );
     }
 
+    if (!env.dryRun) {
+      const accessError = await checkAdsAccess(customerId);
+      if (accessError) {
+        throw new Error(`Account ${customerId} me Google Ads access nahi hai: ${accessError}`);
+      }
+    }
+
     const template = findTemplate(row, templates);
     const plan = await buildDisplayPlan(row, customerId, resolvedSiteId, template);
+
+    if (!env.dryRun) {
+      await assertAccountBudget(customerId, plan.dailyBudget);
+    }
 
     logger.step(`🏢 Site: ${resolvedSiteId ?? '(nahi mila)'}  |  Account: ${customerId}`);
     logger.step(`✅ URL check OK, budget ${plan.dailyBudget}/day, GEO ${plan.geo}`);
@@ -148,6 +166,17 @@ async function main(): Promise<void> {
   );
   logger.info('═══════════════════════════════════════════════');
 
+  if (env.killSwitch) {
+    logger.blank();
+    logger.error('🛑 ADMIN KILL SWITCH IS ACTIVE!');
+    logger.error('  Paid traffic campaign creation is globally DISABLED via environment variable (PAID_TRAFFIC_KILL_SWITCH=true).');
+    logger.error('  No campaigns will be created. Set PAID_TRAFFIC_KILL_SWITCH=false in .env to re-enable.');
+    logger.blank();
+    assertSheetEnv();
+    await pauseAllCampaigns();
+    return;
+  }
+
   assertSheetEnv();
 
   const allRows = await readRows();
@@ -184,6 +213,13 @@ async function main(): Promise<void> {
     logger.blank();
     logger.info('Kuch karne ko nahi hai. Sheet me Display column me YES likho.');
     return;
+  }
+
+  // PDF section 14: token/account pehle hi check — galat ho to yahin ruk jao.
+  if (!env.dryRun) {
+    await assertAdsAccess(
+      eligible.map((row) => resolveCustomerId(row, accountMap, resolveSiteId(row, siteIds))),
+    );
   }
 
   const outcomes: RowOutcome[] = [];

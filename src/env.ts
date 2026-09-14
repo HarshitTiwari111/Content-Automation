@@ -85,6 +85,15 @@ export const env = {
    * --dry always wins, --live turns it off from the command line.
    */
   dryRun: cli.dry ? true : cli.live ? false : read('DRY_RUN').toLowerCase() !== 'false',
+
+  /**
+   * Admin-only Kill Switch for all automated paid traffic (PDF Section 16).
+   * Set PAID_TRAFFIC_KILL_SWITCH=true or KILL_SWITCH=true in .env to immediately
+   * halt all automated campaign creation (Search & Display).
+   */
+  killSwitch:
+    read('PAID_TRAFFIC_KILL_SWITCH').toLowerCase() === 'true' ||
+    read('KILL_SWITCH').toLowerCase() === 'true',
 };
 
 /** Throws with a readable message if something required is missing. */

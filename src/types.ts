@@ -61,6 +61,8 @@ export interface CampaignPlan {
   geo: string;
   geoTargetId: number;
   languageId: number;
+  /** Template ke Device rule se — in devices pe ad nahi dikhega (bid -100%). */
+  excludedDevices: string[];
   finalUrl: string;
   finalUrlSuffix: string;
   keywords: KeywordCriterion[];
@@ -86,6 +88,8 @@ export interface DisplayPlan {
   geo: string;
   geoTargetId: number;
   languageId: number;
+  /** Template ke Device rule se — in devices pe ad nahi dikhega (bid -100%). */
+  excludedDevices: string[];
   finalUrl: string;
   finalUrlSuffix: string;
   adCopy: DisplayAdCopy;

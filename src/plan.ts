@@ -8,6 +8,7 @@ import {
   assertRequiredFields,
   assertUrlReachable,
   resolveBudget,
+  resolveExcludedDevices,
   resolveGeo,
   resolveLanguageId,
 } from './validate.js';
@@ -47,6 +48,7 @@ export async function buildPlan(
   const dailyBudget = resolveBudget(row, template);
   const { geo, geoTargetId } = resolveGeo(row, template);
   const languageId = resolveLanguageId();
+  const excludedDevices = resolveExcludedDevices(template);
 
   await assertUrlReachable(row);
 
@@ -75,6 +77,7 @@ export async function buildPlan(
     geo,
     geoTargetId,
     languageId,
+    excludedDevices,
     finalUrl: row.liveUrl,
     finalUrlSuffix: config.utmSuffix.replace('{article_id}', row.articleId),
     keywords: criteria,

@@ -1,6 +1,6 @@
 import { config } from '../config.js';
 import { env } from './env.js';
-import { mutateResource, PartialCampaignError, uploadImageAsset } from './googleads.js';
+import { deviceCriteria, mutateResource, PartialCampaignError, uploadImageAsset } from './googleads.js';
 import { buildDisplayImages } from './images.js';
 import { logger } from './logger.js';
 import type { CampaignResult, DisplayPlan } from './types.js';
@@ -27,6 +27,10 @@ function idFromResourceName(resourceName: string): string {
 }
 
 export async function createDisplayCampaign(plan: DisplayPlan): Promise<CampaignResult> {
+  if (env.killSwitch) {
+    throw new Error('🛑 ADMIN KILL SWITCH IS ACTIVE: Paid traffic creation is globally blocked (PAID_TRAFFIC_KILL_SWITCH=true).');
+  }
+
   if (env.dryRun) {
     logger.step('🧪 DRY RUN — Google Ads ko kuch nahi bheja gaya');
     return {
@@ -114,10 +118,14 @@ export async function createDisplayCampaign(plan: DisplayPlan): Promise<Campaign
             language: { languageConstant: `languageConstants/${plan.languageId}` },
           },
         },
+        ...deviceCriteria(campaignResourceName, plan.excludedDevices),
       ],
-      'GEO/language',
+      'GEO/language/device',
     );
     logger.step(`🌍 GEO ${plan.geo} set`);
+    if (plan.excludedDevices.length > 0) {
+      logger.step(`📱 In devices pe ad band: ${plan.excludedDevices.join(', ')}`);
+    }
 
     // 5. Ad group — ye bhi PAUSED.
     const adGroupResourceName = await mutateResource(

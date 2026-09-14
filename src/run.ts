@@ -1,7 +1,15 @@
 import { setDefaultResultOrder } from 'node:dns';
 import { config } from '../config.js';
 import { assertSheetEnv, cli, env } from './env.js';
-import { createSearchCampaign, describeAdsError, PartialCampaignError } from './googleads.js';
+import {
+  assertAdsAccess,
+  checkAdsAccess,
+  createSearchCampaign,
+  describeAdsError,
+  PartialCampaignError,
+} from './googleads.js';
+import { assertAccountBudget } from './validate.js';
+import { pauseAllCampaigns } from './killswitch.js';
 import { logger } from './logger.js';
 import { buildPlan } from './plan.js';
 import {
@@ -106,13 +114,6 @@ function findTemplate(
         'lekin campaign phir bhi PAUSED hi banegi (ye rule code me fix hai).',
     );
   }
-  if (found.device) {
-    logger.warn(
-      `Template "${found.name}" me Device "${found.device}" likha hai — ` +
-        'device targeting abhi apply nahi hoti.',
-    );
-  }
-
   return found;
 }
 
@@ -145,7 +146,18 @@ async function processRow(
       customerId = 'DRY-RUN-NO-ACCOUNT';
     }
 
+    if (!env.dryRun) {
+      const accessError = await checkAdsAccess(customerId);
+      if (accessError) {
+        throw new Error(`Account ${customerId} me Google Ads access nahi hai: ${accessError}`);
+      }
+    }
+
     const plan = await buildPlan(row, customerId, resolvedSiteId, template);
+
+    if (!env.dryRun) {
+      await assertAccountBudget(customerId, plan.dailyBudget);
+    }
     logger.step(`🏢 Site: ${resolvedSiteId ?? "(WEBSITE_CONFIG me nahi mila)"}  |  Account: ${customerId}  |  Template: ${template?.name ?? "(koi nahi)"}`);
     logger.step(`✅ URL check OK, budget ${plan.dailyBudget}/day, GEO ${plan.geo}`);
     printPlanPreview(plan);
@@ -206,6 +218,17 @@ async function main(): Promise<void> {
   logger.info(`  Mode: ${env.dryRun ? '🧪 DRY RUN (kuch create nahi hoga)' : '🚀 LIVE (PAUSED campaigns banengi)'}`);
   logger.info('═══════════════════════════════════════════════');
 
+  if (env.killSwitch) {
+    logger.blank();
+    logger.error('🛑 ADMIN KILL SWITCH IS ACTIVE!');
+    logger.error('  Paid traffic campaign creation is globally DISABLED via environment variable (PAID_TRAFFIC_KILL_SWITCH=true).');
+    logger.error('  No campaigns will be created. Set PAID_TRAFFIC_KILL_SWITCH=false in .env to re-enable.');
+    logger.blank();
+    assertSheetEnv();
+    await pauseAllCampaigns();
+    return;
+  }
+
   assertSheetEnv();
 
   const allRows = await readRows();
@@ -253,6 +276,13 @@ async function main(): Promise<void> {
     logger.blank();
     logger.info('Kuch karne ko nahi hai. Sheet me Search column me YES likho aur dobara chalao.');
     return;
+  }
+
+  // PDF section 14: token/account pehle hi check — galat ho to yahin ruk jao.
+  if (!env.dryRun) {
+    await assertAdsAccess(
+      eligible.map((row) => resolveCustomerId(row, accountMap, resolveSiteId(row, siteIds))),
+    );
   }
 
   const outcomes: RowOutcome[] = [];

@@ -433,6 +433,8 @@ export interface ReportRow {
   clicks: number;
   spend: number;
   cpc: number;
+  /** LIVE / PAUSED / REMOVED — PDF section 13 ka "campaign state". */
+  campaignState: string;
 }
 
 /**
@@ -477,6 +479,7 @@ export async function upsertReportRow(entry: ReportRow): Promise<void> {
   put('clicks', String(entry.clicks));
   put('spend', String(entry.spend));
   put('cpc', String(entry.cpc));
+  put('campaignState', entry.campaignState);
   put('lastSync', sheetTimestamp());
 
   // Wahi article + date + source pehle se hai kya?

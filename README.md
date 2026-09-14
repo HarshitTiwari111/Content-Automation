@@ -1,37 +1,17 @@
-# Phase 5 — Google Search Campaign Automation
+# Google Ads Automation — Phase 4 (Display), Phase 5 (Search), Phase 6 (Reporting)
 
-Master Google Sheet me jis row par **`Search (Y/N) = YES`** hai, us article ke liye:
-keywords + Responsive Search Ad banata hai, Google Ads me **PAUSED** Search campaign
-banata hai, aur campaign ID wapas Sheet me likh deta hai.
+Master Google Sheet (`CONTENT_QUEUE`) me:
+- **`Search Ads (Y/N) = YES`** → keywords + Responsive Search Ad ke saath **PAUSED** Search campaign
+- **`Display (Y/N) = YES`** → images + Responsive Display Ad ke saath **PAUSED** Display campaign
 
-**Koi dashboard nahi, koi server nahi — bas ek script.**
+Campaign ID, Status aur error usi row me wapas likhe jaate hain.
 
 ---
 
 ## Rule (ye kabhi nahi badlega)
 
-Campaign aur ad group hamesha **PAUSED** banenge. Paisa tab tak kharch nahi hoga jab tak
+Campaign, ad group aur ad hamesha **PAUSED** banenge. Paisa tab tak kharch nahi hoga jab tak
 tum khud Google Ads me jaake **Enable** nahi dabate.
-
----
-
-## Folder me kya hai
-
-```
-Content-automation/
-├── .env                 ← SPREADSHEET_ID + GOOGLE_CLIENT_EMAIL + GOOGLE_PRIVATE_KEY yahan
-├── config.ts            ← budget, GEO, bid, keyword/ad limits — tumhari settings
-├── scripts/preview.ts   ← bina credentials ke output dekhne ke liye
-└── src/
-    ├── run.ts           ← MAIN file (yahi chalti hai)
-    ├── sheet.ts         ← Sheet padhna / likhna
-    ├── keywords.ts      ← article se keywords banana
-    ├── adcopy.ts        ← headlines + descriptions banana
-    ├── plan.ts          ← row ko campaign plan me badalna
-    ├── validate.ts      ← URL / budget / GEO check
-    ├── googleads.ts     ← Google Ads me campaign banana
-    └── logger.ts        ← terminal + file logging
-```
 
 ---
 
@@ -39,86 +19,59 @@ Content-automation/
 
 | Command | Kya karta hai |
 |---|---|
-| `npm run preview` | **Credentials ki zarurat nahi.** Sample article ke keywords + ad copy dikhata hai |
-| `npm run token` | Google Ads ka **Refresh Token** generate karta hai (ek hi baar chalana hai) |
-| `npm run dry` | Sheet padhta hai, sab kuch banata hai, lekin Google Ads ko **kuch nahi bhejta** |
-| `npm run create -- --live` | Asli PAUSED campaigns banata hai |
-| `npm run typecheck` | Code me koi type error to nahi, check karta hai |
+| `npm run check` | Google Ads token/proxy connection test (sirf padhta hai) |
+| `npm run preview -- --article=A0182` | Ek article ke keywords + ad copy dikhata hai |
+| `npm run dry` | Search: Sheet padhta hai, sab banata hai, Google Ads ko **kuch nahi bhejta** |
+| `npm run create -- --live` | Asli PAUSED Search campaigns banata hai |
+| `npm run display:dry` | Display ka dry run |
+| `npm run display -- --live` | Asli PAUSED Display campaigns banata hai |
+| `npm run report` | Search + Display ka clicks/spend/CPC/status REPORTING tab me |
+| `npm run kill -- --live` | Sheet ki saari chaalu campaigns PAUSE karta hai |
+| `npm run typecheck` | Code me type error check |
 
-Extra flags:
+Extra flags: `--article=A0182` (sirf ek article), `--limit=3` (sirf 3 rows).
 
-```bash
-npm run create -- --live --article=A0182   # sirf ek article
-npm run create -- --live --limit=3         # sirf 3 rows
-npm run token -- --port=3001               # port busy ho to doosra port
-npm run token -- --no-open                 # browser khud na khule (server par)
-```
-
----
-
-## Setup (ek baar ka kaam)
-
-### 1. Install
-```bash
-npm install
-```
-
-### 2. Sheet ki chaabi
-1. Google Cloud Console → naya project → **Google Sheets API** enable karo
-2. **Service Account** banao → **JSON key** download karo
-3. JSON file kholo, usme se 2 cheezein `.env` me copy karo:
-   - `client_email` → `GOOGLE_CLIENT_EMAIL`
-   - `private_key` → `GOOGLE_PRIVATE_KEY` (ek line me, double quotes ke andar, `\n` waise ke waise)
-4. Wahi `client_email` apni Sheet me **Share → Editor** access ke saath daalo
-
-> JSON file ko folder me rakhna zaroori nahi. Chaho to rakh sakte ho — us case me
-> `.env` me `GOOGLE_SERVICE_ACCOUNT_KEY_FILE` set kar do aur upar wali 2 lines khaali chhod do.
-
-### 3. Google Ads ki chaabi
-Chahiye: Developer Token, Client ID, Client Secret, Refresh Token, Customer ID.
-
-> Naya developer token pehle **Test Access** hota hai — usse sirf test account me
-> campaign banti hai. Real account ke liye **Basic Access** apply karna padta hai.
-
-### 4. .env banao
-`.env.example` ko copy karke `.env` banao aur values bharo.
+GitHub se bina terminal: **Actions → Create Search campaigns / Create Display campaigns /
+Sync reporting → Run workflow**.
 
 ---
 
-## Sheet me kaunse columns chahiye
+## Setup
 
-`CONTENT_QUEUE` tab me (header names config.ts me badle ja sakte hain):
-
-**Zaroori:** `Article ID`, `Live URL`, `Search (Y/N)`, `Search Campaign ID`
-**Achha rahega:** `Website`, `Title`, `Topic/Intent`, `Brand`, `Category`, `GEO`,
-`Template`, `Budget`, `Status`, `Error / Notes`
-
----
-
-## Script kaise sochti hai
-
-1. Sheet padho
-2. Sirf wahi rows uthao jinme — `Search = YES` **aur** `Search Campaign ID` khaali
-   **aur** `Live URL` bhara hua
-3. Check karo: URL khulta hai? budget cap ke andar? GEO allowed?
-4. Keywords banao (banned words hata ke)
-5. Headlines (max 30 char) + descriptions (max 90 char) banao
-6. Google Ads: budget → campaign (PAUSED) → GEO/language/negatives → ad group (PAUSED)
-   → keywords → RSA
-7. Sheet me `Search Campaign ID` + `Status = CAMPAIGN_CREATED` likho
-8. Fail hua to `Status = ERROR` + wajah `Error / Notes` me
-
-**Duplicate protection:** campaign ID bhar jaane ke baad wo row dobara process nahi hoti.
-Script 100 baar chala do, ek article ki campaign sirf ek baar banegi.
+1. `npm install`
+2. `.env.example` ko copy karke `.env` banao aur bharo:
+   - **Sheet:** `SPREADSHEET_ID`, `GOOGLE_CLIENT_EMAIL`, `GOOGLE_PRIVATE_KEY` (service account;
+     wahi email Sheet me Editor access ke saath share karo)
+   - **Google Ads (proxy ke through):** `GOOGLE_ADS_REFRESH_TOKEN`, `GOOGLE_ADS_CUSTOMER_ID`,
+     `GOOGLE_ADS_LOGIN_CUSTOMER_ID`. Client ID / Client Secret / Developer Token **nahi** chahiye —
+     proxy handle karti hai. Refresh token `https://secure.dataram.workers.dev/auth/login` se aata hai.
+   - **AI copy:** `OPENAI_API_KEY`
+3. GitHub Actions use karna ho to yahi values **Settings → Secrets and variables → Actions** me daalo.
 
 ---
 
-## Pehli baar chalane ka safe order
+## Sheet tabs
 
-```bash
-npm run preview                  # 1. keywords/ad copy theek lag rahe hain?
-npm run dry                      # 2. Sheet se asli rows uthake dikhao (kuch banega nahi)
-npm run create -- --live --limit=1   # 3. test account me sirf 1 campaign
-```
+| Tab | Kaam |
+|---|---|
+| `CONTENT_QUEUE` | Article rows + Search/Display switches + campaign IDs |
+| `WEBSITE_CONFIG` | Domain → Site ID (campaign ke naam ke liye) |
+| `AD_ACCOUNT_MAP` | Site ID → Google Ads CID (har site ka apna account) |
+| `CAMPAIGN_TEMPLATES` | Allowed GEOs, Device, Daily Budget Cap, Max Bid |
+| `ERROR_LOG` | Har fail hui row ka record |
+| `REPORTING` | Din-wise clicks, spend, CPC, status (`Status` column ho to state bhi likha jata hai) |
+
+---
+
+## Safety checks (PDF section 14 / 16)
+
+- Live URL khulta hai aur Website se match karta hai
+- Duplicate nahi: campaign ID bhar jaane ke baad row dobara process nahi hoti
+- Budget template ke cap aur **account-level cap** (`config.ts → budget`) ke andar
+- GEO/language allowed; Device rule template se lagta hai (Mobile / Desktop / Tablet / All)
+- Keywords (Search) aur images (Display) maujood — bina keyword ki Search campaign nahi banti
+- Run shuru hone se pehle Google Ads token aur account access check
+- **Kill switch:** `.env` (ya GitHub Variables) me `PAID_TRAFFIC_KILL_SWITCH=true` → nayi campaign
+  nahi banegi aur chaalu campaigns PAUSE ho jayengi
 
 Logs `logs/run-YYYY-MM-DD.log` me save hote hain.

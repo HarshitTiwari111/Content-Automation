@@ -1,4 +1,5 @@
 import { config } from '../config.js';
+import { searchAds } from './googleads.js';
 import { withRetry } from './retry.js';
 import type { ArticleRow, CampaignTemplate } from './types.js';
 
@@ -65,10 +66,10 @@ export async function assertUrlReachable(row: ArticleRow): Promise<void> {
  */
 export function resolveBudget(row: ArticleRow, template?: CampaignTemplate): number {
   const raw = row.budget.replace(/[^0-9.]/g, '');
-  const value = raw ? Number(raw) : config.budget.defaultDailyBudget;
+  const value = raw ? Number(raw) : (template?.dailyBudgetCap ?? config.budget.defaultDailyBudget);
 
   if (!Number.isFinite(value) || value <= 0) {
-    throw new Error(`Budget value galat hai: "${row.budget}"`);
+    throw new Error(`Budget khaali hai: Google Sheet me row ka Budget ya Template ka Daily Budget Cap bharna zaroori hai.`);
   }
 
   const cap = template?.dailyBudgetCap ?? config.budget.maxDailyBudget;
@@ -111,4 +112,71 @@ export function resolveLanguageId(): number {
     throw new Error(`Language "${config.defaultLanguage}" ka id config.ts me nahi mila.`);
   }
   return id;
+}
+
+const DEVICE_ALIASES: Record<string, string> = {
+  mobile: 'MOBILE',
+  mobiles: 'MOBILE',
+  phone: 'MOBILE',
+  smartphone: 'MOBILE',
+  desktop: 'DESKTOP',
+  desktops: 'DESKTOP',
+  computer: 'DESKTOP',
+  pc: 'DESKTOP',
+  tablet: 'TABLET',
+  tablets: 'TABLET',
+};
+
+/**
+ * PDF section 8/9: template ke Device rule.
+ * "Mobile" likha ho to Desktop aur Tablet band (bid -100%).
+ * Khaali ya "All" ho to saare devices chalte hain.
+ */
+export function resolveExcludedDevices(template?: CampaignTemplate): string[] {
+  const raw = (template?.device ?? '').trim().toLowerCase();
+  if (!raw || ['all', 'any', 'all devices'].includes(raw)) return [];
+
+  const wanted = new Set<string>();
+  for (const part of raw.split(/[,/|+&]|\band\b/).map((p) => p.trim()).filter(Boolean)) {
+    const device = DEVICE_ALIASES[part];
+    if (!device) {
+      throw new Error(
+        `"${template?.name}" template ka Device "${template?.device}" samajh nahi aaya — ` +
+          'Mobile, Desktop, Tablet ya All likho.',
+      );
+    }
+    wanted.add(device);
+  }
+  return ['MOBILE', 'DESKTOP', 'TABLET'].filter((device) => !wanted.has(device));
+}
+
+/**
+ * PDF section 14: "Budget is within template and account-level cap".
+ * Account ki saari ENABLED + PAUSED campaigns ka budget + nayi campaign ka
+ * budget, account ki limit se upar nahi jaana chahiye.
+ */
+export async function assertAccountBudget(customerId: string, newBudget: number): Promise<void> {
+  const cap = config.budget.accountDailyBudgetCaps[customerId] ?? config.budget.maxAccountDailyBudget;
+  if (!cap) return;
+
+  const response = (await searchAds(
+    customerId,
+    'SELECT campaign.id, campaign_budget.amount_micros FROM campaign ' +
+      "WHERE campaign.status IN ('ENABLED', 'PAUSED')",
+  )) as { results?: Array<{ campaignBudget?: { amountMicros?: string | number } }> };
+
+  const used =
+    Math.round(
+      (response.results ?? []).reduce(
+        (sum, r) => sum + Number(r.campaignBudget?.amountMicros ?? 0) / 1_000_000,
+        0,
+      ) * 100,
+    ) / 100;
+
+  if (used + newBudget > cap) {
+    throw new Error(
+      `Account ${customerId} ka daily budget cap ${cap} hai. Pehle se ${used} ki campaigns hain, ` +
+        `nayi ${newBudget} jodne se limit paar ho jayegi (config.ts → budget).`,
+    );
+  }
 }
