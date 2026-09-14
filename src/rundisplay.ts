@@ -11,7 +11,7 @@ import {
   PartialCampaignError,
 } from './googleads.js';
 import { assertAccountBudget } from './validate.js';
-import { pauseAllCampaigns } from './killswitch.js';
+import { killSwitchSource, pauseAllCampaigns } from './killswitch.js';
 import { logger } from './logger.js';
 import {
   appendErrorLog,
@@ -174,18 +174,18 @@ async function main(): Promise<void> {
   );
   logger.info('═══════════════════════════════════════════════');
 
-  if (env.killSwitch) {
+  assertSheetEnv();
+
+  // PDF section 16: admin-only kill switch — Sheet ka menu ya .env.
+  const killSource = await killSwitchSource();
+  if (killSource) {
     logger.blank();
-    logger.error('🛑 ADMIN KILL SWITCH IS ACTIVE!');
-    logger.error('  Paid traffic campaign creation is globally DISABLED via environment variable (PAID_TRAFFIC_KILL_SWITCH=true).');
-    logger.error('  No campaigns will be created. Set PAID_TRAFFIC_KILL_SWITCH=false in .env to re-enable.');
+    logger.error(`🛑 KILL SWITCH ON hai (${killSource})`);
+    logger.error('  Koi nayi campaign nahi banegi. Chaalu campaigns PAUSE ki ja rahi hain.');
     logger.blank();
-    assertSheetEnv();
     await pauseAllCampaigns();
     return;
   }
-
-  assertSheetEnv();
 
   const allRows = await readRows();
   logger.info(`📄 ${env.sheetTab} padhi — ${allRows.length} rows`);

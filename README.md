@@ -71,7 +71,9 @@ Sync reporting → Run workflow**.
 - GEO/language allowed; Device rule template se lagta hai (Mobile / Desktop / Tablet / All)
 - Keywords (Search) aur images (Display) maujood — bina keyword ki Search campaign nahi banti
 - Run shuru hone se pehle Google Ads token aur account access check
-- **Kill switch:** `.env` (ya GitHub Variables) me `PAID_TRAFFIC_KILL_SWITCH=true` → nayi campaign
-  nahi banegi aur chaalu campaigns PAUSE ho jayengi
+- **Kill switch (admin):** Sheet ke upar **🛑 Kill Switch → ON** (SETTINGS tab, sirf admin ke
+  liye protected). Developer `.env` / GitHub Variables me `PAID_TRAFFIC_KILL_SWITCH=true` bhi kar
+  sakta hai. Dono me se koi bhi ON → nayi campaign nahi banegi aur chaalu campaigns agli run pe
+  PAUSE ho jayengi. Menu ka code: `apps-script/KillSwitch.gs`
 
 Logs `logs/run-YYYY-MM-DD.log` me save hote hain.

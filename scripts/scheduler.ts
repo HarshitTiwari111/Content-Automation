@@ -1,6 +1,6 @@
 import { spawn } from 'node:child_process';
 import { setDefaultResultOrder } from 'node:dns';
-import { env } from '../src/env.js';
+import { killSwitchSource } from '../src/killswitch.js';
 
 setDefaultResultOrder('ipv4first');
 
@@ -30,9 +30,18 @@ function runScript(scriptPath: string, args: string[] = []): Promise<void> {
   });
 }
 async function runAutomationCycle(): Promise<void> {
-  if (env.killSwitch) {
+  let killSource = '';
+  try {
+    killSource = await killSwitchSource();
+  } catch (error) {
+    // Kill switch padh hi nahi paye — campaign banana safe nahi, is baar chhod do.
+    console.error(`❌ Kill switch padh nahi paye: ${(error as Error).message} — ye cycle skip.`);
+    return;
+  }
+
+  if (killSource) {
     const timestamp = new Date().toLocaleString('en-IN', { timeZone: 'Asia/Kolkata' });
-    console.log(`\n🛑 [${timestamp}] ADMIN KILL SWITCH ACTIVE: Skipping campaign creation cycle.`);
+    console.log(`\n🛑 [${timestamp}] KILL SWITCH ON (${killSource}): campaign creation skip.`);
     // Chaalu campaigns PAUSE karo, phir reporting sync
     await runScript('scripts/kill.ts', ['--live']);
     await runScript('scripts/report.ts');

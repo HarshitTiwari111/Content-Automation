@@ -533,6 +533,36 @@ export async function upsertReportRow(entry: ReportRow): Promise<void> {
   );
 }
 
+/**
+ * SETTINGS tab me "Kill Switch" ki Value ON hai ya nahi.
+ * Tab abhi bana hi nahi to OFF. Sheet padhne me koi aur galti ho to error —
+ * pata na chale to campaign banana theek nahi.
+ */
+export async function readSheetKillSwitch(): Promise<boolean> {
+  const sheets = getClient();
+  const tab = config.settings.tab;
+
+  let values: string[][];
+  try {
+    const response = await withRetry(`${tab} padhna`, () =>
+      sheets.spreadsheets.values.get({
+        spreadsheetId: env.sheetId,
+        range: `${tab}!A1:B50`,
+      }),
+    );
+    values = (response.data.values ?? []) as string[][];
+  } catch (error) {
+    const message = error instanceof Error ? error.message : String(error);
+    if (message.toLowerCase().includes('unable to parse range')) return false;
+    throw explainSheetError(error);
+  }
+
+  const row = values.find(
+    (r) => normalise(String(r[0] ?? '')) === normalise(config.settings.killSwitchLabel),
+  );
+  return ['on', 'true', 'yes', '1'].includes(normalise(String(row?.[1] ?? '')));
+}
+
 /** Aaj ki date, Sheet wali shakl me. */
 export function today(): string {
   return sheetTimestamp().split(' ')[0] ?? '';

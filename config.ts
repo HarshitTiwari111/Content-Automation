@@ -323,6 +323,16 @@ export const config = {
     matchUrlToWebsite: true,
   },
 
+  /**
+   * SETTINGS tab — PDF section 16: "admin-only kill switch".
+   * Admin Sheet ke "🛑 Kill Switch" menu se Value ON/OFF karta hai
+   * (apps-script/KillSwitch.gs). Tab na ho to OFF maana jaata hai.
+   */
+  settings: {
+    tab: 'SETTINGS',
+    killSwitchLabel: 'Kill Switch',
+  },
+
   /** Sheet me date/time isi zone me likhi jaati hai. */
   timeZone: 'Asia/Kolkata',
 

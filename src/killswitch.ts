@@ -1,8 +1,27 @@
 import { env } from './env.js';
 import { mutateResource, searchAds } from './googleads.js';
 import { logger } from './logger.js';
-import { readAccountMap, readRows, readSiteIds, siteKey, today, writeBack } from './sheet.js';
+import { config } from '../config.js';
+import {
+  readAccountMap,
+  readRows,
+  readSheetKillSwitch,
+  readSiteIds,
+  siteKey,
+  today,
+  writeBack,
+} from './sheet.js';
 import type { ArticleRow } from './types.js';
+
+/**
+ * Kill switch ON hai to kahan se — warna ''.
+ * Admin ke liye Sheet ka menu, developer ke liye .env — dono me se koi bhi ON ho to band.
+ */
+export async function killSwitchSource(): Promise<string> {
+  if (env.killSwitch) return '.env me PAID_TRAFFIC_KILL_SWITCH=true';
+  if (await readSheetKillSwitch()) return `Sheet ke ${config.settings.tab} tab me`;
+  return '';
+}
 
 /**
  * PDF section 16: "admin-only kill switch for all automated paid traffic".
