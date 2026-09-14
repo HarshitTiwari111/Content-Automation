@@ -56,17 +56,31 @@ function setKillSwitch_(value) {
       : 'Kill Switch OFF karna hai?\n\nAutomation phir se campaigns banana shuru karega (hamesha PAUSED).';
   if (ui.alert(question, ui.ButtonSet.YES_NO) !== ui.Button.YES) return;
 
-  var cell = killSwitchCell_();
+  var cell;
   try {
+    cell = killSwitchCell_();
     cell.setValue(value);
-    var who = Session.getActiveUser().getEmail() || 'unknown';
-    var when = Utilities.formatDate(new Date(), 'Asia/Kolkata', 'dd/MM/yyyy HH:mm:ss');
-    cell.offset(0, 1).setValue(when + ' — ' + who);
+    SpreadsheetApp.flush();
   } catch (e) {
-    // SETTINGS tab protected hai aur ye user admin nahi hai.
-    ui.alert('Aapko Kill Switch badalne ki permission nahi hai. Admin se baat karo.');
+    // Asli wajah dikhao — protected ho to Google khud "protected" likhta hai.
+    var reason = String((e && e.message) || e);
+    var hint = /protect/i.test(reason)
+      ? '\n\nSETTINGS tab lock hai aur aapko permission nahi hai — admin se baat karo.'
+      : '';
+    ui.alert('Kill Switch badal nahi paya.\n\nWajah: ' + reason + hint);
     return;
   }
+
+  // Kisne/kab — ye fail ho to bhi Kill Switch badal chuka hai.
+  try {
+    var who = '';
+    try {
+      who = Session.getActiveUser().getEmail();
+    } catch (ignore) {}
+    var when = Utilities.formatDate(new Date(), 'Asia/Kolkata', 'dd/MM/yyyy HH:mm:ss');
+    cell.offset(0, 1).setValue(when + ' — ' + (who || 'unknown'));
+  } catch (ignore) {}
+
   ui.alert('Kill Switch ab ' + value + ' hai.');
 }
 
