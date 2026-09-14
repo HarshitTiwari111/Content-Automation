@@ -193,8 +193,16 @@ export function selectEligible(
   return rows.filter((row) => {
     const wantsSearch = ['yes', 'y', 'true'].includes(row.search.toLowerCase());
     const alreadyDone = createdCampaigns.has(row.articleId) || row.searchCampaignId !== '';
-    return wantsSearch && !alreadyDone && row.liveUrl !== '';
+    return wantsSearch && !alreadyDone && !isErrorRow(row) && row.liveUrl !== '';
   });
+}
+
+/**
+ * PDF section 7: "Errors ... do not silently retry forever".
+ * ERROR wali row tab tak dobara nahi uthti jab tak insaan Status khaali na kare.
+ */
+export function isErrorRow(row: ArticleRow): boolean {
+  return row.status.trim().toUpperCase() === 'ERROR';
 }
 
 /**

@@ -51,6 +51,8 @@ interface RowTotal {
   spend: number;
   hasData: boolean;
   live: boolean;
+  /** Google se kam se kam ek channel ka status mila. */
+  known: boolean;
 }
 
 /** PDF ke channels — har ek ka apna ID column aur Traffic Source naam. */
@@ -196,7 +198,9 @@ async function main(): Promise<void> {
           spend: 0,
           hasData: false,
           live: false,
+          known: false,
         };
+        if (status) total.known = true;
         if (status === 'ENABLED') total.live = true;
         totals.set(row.rowNumber, total);
 
@@ -260,6 +264,10 @@ async function main(): Promise<void> {
       ...(total.hasData && hasColumn('cpc') ? { cpc: String(cpc) } : {}),
       // Google me koi bhi channel chaalu ho to Sheet me LIVE (PDF section 14).
       ...(total.live ? { status: 'LIVE' } : {}),
+      // Sheet me LIVE tha lekin Google me ab koi channel chaalu nahi — PAUSED.
+      ...(!total.live && total.known && total.row.status.trim().toUpperCase() === 'LIVE'
+        ? { status: 'PAUSED' }
+        : {}),
     };
     if (Object.keys(updates).length === 0) continue;
 

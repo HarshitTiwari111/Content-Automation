@@ -7,6 +7,7 @@ import {
   assertAdsAccess,
   checkAdsAccess,
   describeAdsError,
+  DuplicateCampaignError,
   PartialCampaignError,
 } from './googleads.js';
 import { assertAccountBudget } from './validate.js';
@@ -15,6 +16,7 @@ import { logger } from './logger.js';
 import {
   appendErrorLog,
   hasColumn,
+  isErrorRow,
   readAccountMap,
   readCampaignTemplates,
   readRows,
@@ -67,7 +69,7 @@ function findTemplate(
 function selectEligible(rows: ArticleRow[]): ArticleRow[] {
   return rows.filter((row) => {
     const wants = ['yes', 'y', 'true'].includes(row.display.toLowerCase());
-    return wants && row.displayCampaignId === '' && row.liveUrl !== '';
+    return wants && row.displayCampaignId === '' && !isErrorRow(row) && row.liveUrl !== '';
   });
 }
 
@@ -132,7 +134,8 @@ async function processRow(
     logger.error(reason);
 
     const partialId = error instanceof PartialCampaignError ? error.campaignId : undefined;
-    if (partialId) {
+    const duplicate = error instanceof DuplicateCampaignError;
+    if (partialId && !duplicate) {
       logger.warn(`Campaign ${partialId} ban chuki hai (adhoori). Sheet me ID likh raha hoon.`);
     }
 
@@ -140,13 +143,18 @@ async function processRow(
       try {
         await writeBack(row.rowNumber, {
           ...(partialId ? { displayCampaignId: partialId } : {}),
-          status: 'ERROR',
+          // Duplicate me campaign pehle se maujood hai — wo ERROR nahi hai.
+          status: duplicate ? 'CAMPAIGN_CREATED' : 'ERROR',
           notes: reason.slice(0, 500),
         });
         await appendErrorLog({
           articleId: row.articleId,
           message: reason.slice(0, 500),
-          retryStatus: partialId ? 'PARTIAL — campaign bani, aage fail' : 'PENDING',
+          retryStatus: duplicate
+            ? 'DUPLICATE — nayi nahi banayi'
+            : partialId
+              ? 'PARTIAL — campaign bani, aage fail'
+              : 'PENDING',
         });
       } catch (writeError) {
         logger.error(`Sheet me error likhne me bhi problem: ${(writeError as Error).message}`);
@@ -198,6 +206,19 @@ async function main(): Promise<void> {
   const siteIds = await readSiteIds();
   const accountMap = await readAccountMap();
   logger.info(`🌐 ${siteIds.size} site codes, ${accountMap.size} account mapping, ${templates.size} template`);
+
+  const errorRows = allRows.filter(
+    (row) =>
+      ['yes', 'y', 'true'].includes(row.display.toLowerCase()) &&
+      row.displayCampaignId === '' &&
+      isErrorRow(row),
+  );
+  if (errorRows.length > 0) {
+    logger.info(
+      `⏸️  ${errorRows.length} rows ERROR me hain (${errorRows.map((r) => r.articleId).join(', ')}) — ` +
+        'galti theek karke Status khaali karoge tabhi dobara try hongi',
+    );
+  }
 
   let eligible = selectEligible(allRows);
   if (cli.article) {

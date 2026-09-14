@@ -48,6 +48,48 @@ export class PartialCampaignError extends Error {
 }
 
 /**
+ * Google Ads me is article + channel ki campaign pehle se mili.
+ * Uska ID Sheet me likha jaata hai taaki nayi (duplicate) na bane.
+ */
+export class DuplicateCampaignError extends PartialCampaignError {
+  constructor(message: string, campaignId: string) {
+    super(message, campaignId);
+    this.name = 'DuplicateCampaignError';
+  }
+}
+
+/**
+ * PDF section 14: "No duplicate campaign exists for same Article ID + channel + account".
+ * Sheet ki ID mit bhi jaye, to bhi account me naam se dhoondh leta hai
+ * (naam: SITE | ARTICLE_ID | CHANNEL | GEO | TEMPLATE).
+ */
+export async function assertNoExistingCampaign(
+  customerId: string,
+  articleId: string,
+  channel: string,
+): Promise<void> {
+  // GAQL LIKE me [ ] % _ ko bracket me likhna padta hai; quote ko escape.
+  const literal = (text: string): string =>
+    text.replace(/[[\]%_]/g, (c) => `[${c}]`).replace(/'/g, "\\'");
+
+  const response = (await searchAds(
+    customerId,
+    'SELECT campaign.id, campaign.name FROM campaign ' +
+      `WHERE campaign.name LIKE '% | ${literal(articleId)} | ${literal(channel)} | %' ` +
+      "AND campaign.status != 'REMOVED'",
+  )) as { results?: Array<{ campaign?: { id?: string; name?: string } }> };
+
+  const existing = response.results?.[0]?.campaign;
+  if (existing?.id) {
+    throw new DuplicateCampaignError(
+      `Is article ki ${channel} campaign Google Ads me pehle se hai ` +
+        `(ID ${existing.id}, "${existing.name}") — nayi nahi banayi. Uska ID Sheet me likh diya.`,
+      String(existing.id),
+    );
+  }
+}
+
+/**
  * Node ka "fetch failed" kuch nahi batata — asli wajah `cause` me chhupi hoti
  * hai (ENOTFOUND, ECONNREFUSED, certificate error, timeout...). Wahi nikalta hai.
  */
@@ -299,6 +341,9 @@ export async function createSearchCampaign(plan: CampaignPlan): Promise<Campaign
   }
 
   assertAdsEnv();
+
+  // Budget banne se pehle — warna duplicate pe bekaar budget reh jaata hai.
+  await assertNoExistingCampaign(plan.customerId, plan.row.articleId, 'SEARCH');
 
   // 1. Daily budget (kisi aur campaign ke saath share nahi).
   const budgetResourceName = await mutateResource(

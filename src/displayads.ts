@@ -1,6 +1,12 @@
 import { config } from '../config.js';
 import { env } from './env.js';
-import { deviceCriteria, mutateResource, PartialCampaignError, uploadImageAsset } from './googleads.js';
+import {
+  assertNoExistingCampaign,
+  deviceCriteria,
+  mutateResource,
+  PartialCampaignError,
+  uploadImageAsset,
+} from './googleads.js';
 import { buildDisplayImages } from './images.js';
 import { logger } from './logger.js';
 import type { CampaignResult, DisplayPlan } from './types.js';
@@ -41,6 +47,9 @@ export async function createDisplayCampaign(plan: DisplayPlan): Promise<Campaign
       dryRun: true,
     };
   }
+
+  // Kuch bhi upload/banane se pehle — PDF section 14 ka duplicate check.
+  await assertNoExistingCampaign(plan.customerId, plan.row.articleId, config.display.channel);
 
   // 1. Images pehle — ye sabse zyada fail hone wala step hai, isliye campaign
   //    banane se pehle kar lete hain. Fail hua to kuch bana hi nahi hoga.

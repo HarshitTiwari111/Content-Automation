@@ -6,6 +6,7 @@ import {
   checkAdsAccess,
   createSearchCampaign,
   describeAdsError,
+  DuplicateCampaignError,
   PartialCampaignError,
 } from './googleads.js';
 import { assertAccountBudget } from './validate.js';
@@ -15,6 +16,7 @@ import { buildPlan } from './plan.js';
 import {
   appendErrorLog,
   assertContentQueueWritable,
+  isErrorRow,
   readAccountMap,
   readSiteIds,
   readCampaignTemplates,
@@ -182,7 +184,8 @@ async function processRow(
     // Campaign ban chuki thi lekin aage fail hua — ID zaroor likho,
     // warna agli run wahi campaign dobara bana degi.
     const partialId = error instanceof PartialCampaignError ? error.campaignId : undefined;
-    if (partialId) {
+    const duplicate = error instanceof DuplicateCampaignError;
+    if (partialId && !duplicate) {
       logger.warn(`Campaign ${partialId} ban chuki hai (adhoori). Sheet me ID likh raha hoon.`);
     }
 
@@ -192,14 +195,19 @@ async function processRow(
         // ERROR_LOG tab me — PDF section 13.
         await writeBack(row.rowNumber, {
           ...(partialId ? { searchCampaignId: partialId } : {}),
-          status: 'ERROR',
+          // Duplicate me campaign pehle se maujood hai — wo ERROR nahi hai.
+          status: duplicate ? 'CAMPAIGN_CREATED' : 'ERROR',
           notes: reason.slice(0, 500),
         });
 
         const logged = await appendErrorLog({
           articleId: row.articleId,
           message: reason.slice(0, 500),
-          retryStatus: partialId ? 'PARTIAL — campaign bani, aage fail' : 'PENDING',
+          retryStatus: duplicate
+            ? 'DUPLICATE — nayi nahi banayi'
+            : partialId
+              ? 'PARTIAL — campaign bani, aage fail'
+              : 'PENDING',
         });
         if (logged) logger.step(`📄 ${config.errorLog.tab} me error likh diya`);
       } catch (writeError) {
@@ -256,6 +264,19 @@ async function main(): Promise<void> {
   const createdCampaigns = await readCreatedCampaigns();
   if (createdCampaigns.size > 0) {
     logger.info(`✅ ${createdCampaigns.size} articles ki campaign pehle se bani hui hai — skip hongi`);
+  }
+
+  const errorRows = allRows.filter(
+    (row) =>
+      ['yes', 'y', 'true'].includes(row.search.toLowerCase()) &&
+      row.searchCampaignId === '' &&
+      isErrorRow(row),
+  );
+  if (errorRows.length > 0) {
+    logger.info(
+      `⏸️  ${errorRows.length} rows ERROR me hain (${errorRows.map((r) => r.articleId).join(', ')}) — ` +
+        'galti theek karke Status khaali karoge tabhi dobara try hongi',
+    );
   }
 
   let eligible = selectEligible(allRows, createdCampaigns);
