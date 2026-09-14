@@ -75,7 +75,7 @@ function setKillSwitch_(value) {
   try {
     var who = '';
     try {
-      who = Session.getActiveUser().getEmail();
+      who = Session.getActiveUser().getEmail() || Session.getEffectiveUser().getEmail();
     } catch (ignore) {}
     var when = Utilities.formatDate(new Date(), 'Asia/Kolkata', 'dd/MM/yyyy HH:mm:ss');
     cell.offset(0, 1).setValue(when + ' — ' + (who || 'unknown'));
