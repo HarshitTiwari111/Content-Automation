@@ -7,7 +7,13 @@ export interface ArticleRow {
   siteId: string;
   website: string;
   brand: string;
+  /**
+   * Article ka niche (Running Shoes jaisa) — ad copy aur keywords me jaata hai.
+   * Category column me Generic/Brand likha ho to ye khaali rehta hai.
+   */
   category: string;
+  /** Category column ki asli value — Generic / Brand (ads ka faisla isi se). */
+  adCategory: string;
   topic: string;
   title: string;
   liveUrl: string;

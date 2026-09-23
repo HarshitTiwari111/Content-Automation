@@ -68,6 +68,19 @@ export const config = {
   } as Record<string, number>,
   defaultLanguage: 'en',
 
+  /**
+   * Category column (Generic / Brand) ----------------------------------------
+   * Sirf "Brand" wale article par campaign banti hai. "Generic" par koi
+   * campaign nahi — na Search, na Display, chahe Y/N me YES likha ho.
+   *
+   * Sheet me Category column hai hi nahi, to ye rok nahi lagti (purana
+   * behaviour) — bas run me warning dikhti hai.
+   */
+  category: {
+    /** Inhi values par campaign banegi (chhote-bade akshar se farak nahi). */
+    adsAllowed: ['brand'],
+  },
+
   /** Keywords --------------------------------------------------------------- */
   keywords: {
     /** Max keyword texts generated per article. */

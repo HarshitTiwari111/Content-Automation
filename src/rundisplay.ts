@@ -14,7 +14,9 @@ import { assertAccountBudget } from './validate.js';
 import { killSwitchSource, pauseAllCampaigns } from './killswitch.js';
 import { logger } from './logger.js';
 import {
+  adsAllowedByCategory,
   appendErrorLog,
+  hasCategoryColumn,
   hasColumn,
   isErrorRow,
   readAccountMap,
@@ -69,7 +71,13 @@ function findTemplate(
 function selectEligible(rows: ArticleRow[]): ArticleRow[] {
   return rows.filter((row) => {
     const wants = ['yes', 'y', 'true'].includes(row.display.toLowerCase());
-    return wants && row.displayCampaignId === '' && !isErrorRow(row) && row.liveUrl !== '';
+    return (
+      wants &&
+      row.displayCampaignId === '' &&
+      !isErrorRow(row) &&
+      adsAllowedByCategory(row) &&
+      row.liveUrl !== ''
+    );
   });
 }
 
@@ -218,6 +226,28 @@ async function main(): Promise<void> {
       `⏸️  ${errorRows.length} rows ERROR me hain (${errorRows.map((r) => r.articleId).join(', ')}) — ` +
         'galti theek karke Status khaali karoge tabhi dobara try hongi',
     );
+  }
+
+  // PDF section 4 ka content type — Sheet me Category = Brand par hi ad chalti hai.
+  if (!hasCategoryColumn()) {
+    logger.warn(
+      `${env.sheetTab} me "Category" column nahi hai — Generic/Brand wali rok nahi lag rahi.`,
+    );
+  } else {
+    const blocked = allRows.filter(
+      (row) =>
+        ['yes', 'y', 'true'].includes(row.display.toLowerCase()) &&
+        row.displayCampaignId === '' &&
+        !isErrorRow(row) &&
+        !adsAllowedByCategory(row),
+    );
+    if (blocked.length > 0) {
+      logger.info(
+        `⏭️  ${blocked.length} rows chhodi — Category "Brand" nahi hai ` +
+          `(${blocked.slice(0, 5).map((r) => `${r.articleId}: "${r.adCategory || 'khaali'}"`).join(', ')}` +
+          `${blocked.length > 5 ? ' …' : ''})`,
+      );
+    }
   }
 
   let eligible = selectEligible(allRows);

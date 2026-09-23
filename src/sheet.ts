@@ -160,7 +160,10 @@ export async function readRows(): Promise<ArticleRow[]> {
       siteId: cell(raw, 'siteId'),
       website: cell(raw, 'website'),
       brand: cell(raw, 'brand'),
-      category: cell(raw, 'category'),
+      // Category me Generic/Brand likha ho to wo niche nahi hai — ad copy me
+      // "Brand" jaisa shabd nahi jaana chahiye.
+      category: isAdCategoryWord(cell(raw, 'category')) ? '' : cell(raw, 'category'),
+      adCategory: cell(raw, 'category'),
       topic: cell(raw, 'topic'),
       title: cell(raw, 'title'),
       liveUrl: cell(raw, 'liveUrl'),
@@ -180,6 +183,29 @@ export async function readRows(): Promise<ArticleRow[]> {
   return rows;
 }
 
+/** "Generic" / "Brand" jaisi value hai (niche nahi)? */
+function isAdCategoryWord(value: string): boolean {
+  const word = normalise(value);
+  return word === 'generic' || (config.category.adsAllowed as readonly string[]).includes(word);
+}
+
+/**
+ * Category column Sheet me hai ya nahi.
+ * Na ho to rok nahi lagti — purana behaviour chalta rehta hai.
+ */
+export function hasCategoryColumn(): boolean {
+  return columnIndex('category') !== -1;
+}
+
+/**
+ * Is row par campaign ban sakti hai ya nahi.
+ * Sirf Category = Brand par banti hai; Generic (ya khaali/galat value) par nahi.
+ */
+export function adsAllowedByCategory(row: ArticleRow): boolean {
+  if (!hasCategoryColumn()) return true;
+  return (config.category.adsAllowed as readonly string[]).includes(normalise(row.adCategory));
+}
+
 /**
  * Rows that still need a Search campaign:
  *   Search = YES  AND  Live URL present  AND  campaign pehle se nahi bani.
@@ -193,7 +219,13 @@ export function selectEligible(
   return rows.filter((row) => {
     const wantsSearch = ['yes', 'y', 'true'].includes(row.search.toLowerCase());
     const alreadyDone = createdCampaigns.has(row.articleId) || row.searchCampaignId !== '';
-    return wantsSearch && !alreadyDone && !isErrorRow(row) && row.liveUrl !== '';
+    return (
+      wantsSearch &&
+      !alreadyDone &&
+      !isErrorRow(row) &&
+      adsAllowedByCategory(row) &&
+      row.liveUrl !== ''
+    );
   });
 }
 

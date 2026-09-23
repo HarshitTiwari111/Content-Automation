@@ -23,6 +23,7 @@ const sample: ArticleRow = {
   website: 'https://www.example.com',
   brand: 'Vans',
   category: 'Running Shoes',
+  adCategory: 'Brand',
   topic: 'how to choose running shoes for beginners',
   title: 'Best Running Shoes for Beginners in 2026: A Complete Guide',
   liveUrl: 'https://www.example.com/best-running-shoes',

@@ -4,3 +4,5 @@ logs/
 *.key.json
 service-account.json
 .DS_Store
+.env.bak
+.env.*

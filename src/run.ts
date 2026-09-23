@@ -14,8 +14,10 @@ import { killSwitchSource, pauseAllCampaigns } from './killswitch.js';
 import { logger } from './logger.js';
 import { buildPlan } from './plan.js';
 import {
+  adsAllowedByCategory,
   appendErrorLog,
   assertContentQueueWritable,
+  hasCategoryColumn,
   isErrorRow,
   readAccountMap,
   readSiteIds,
@@ -277,6 +279,28 @@ async function main(): Promise<void> {
       `⏸️  ${errorRows.length} rows ERROR me hain (${errorRows.map((r) => r.articleId).join(', ')}) — ` +
         'galti theek karke Status khaali karoge tabhi dobara try hongi',
     );
+  }
+
+  // PDF section 4 ka content type — Sheet me Category = Brand par hi ad chalti hai.
+  if (!hasCategoryColumn()) {
+    logger.warn(
+      `${env.sheetTab} me "Category" column nahi hai — Generic/Brand wali rok nahi lag rahi.`,
+    );
+  } else {
+    const blocked = allRows.filter(
+      (row) =>
+        ['yes', 'y', 'true'].includes(row.search.toLowerCase()) &&
+        row.searchCampaignId === '' &&
+        !isErrorRow(row) &&
+        !adsAllowedByCategory(row),
+    );
+    if (blocked.length > 0) {
+      logger.info(
+        `⏭️  ${blocked.length} rows chhodi — Category "Brand" nahi hai ` +
+          `(${blocked.slice(0, 5).map((r) => `${r.articleId}: "${r.adCategory || 'khaali'}"`).join(', ')}` +
+          `${blocked.length > 5 ? ' …' : ''})`,
+      );
+    }
   }
 
   let eligible = selectEligible(allRows, createdCampaigns);
