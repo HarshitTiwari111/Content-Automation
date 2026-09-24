@@ -210,7 +210,7 @@ export const config = {
       siteId: ['Site ID', 'SiteID', 'Site Id', 'Site'],
       website: ['Website', 'Website URL'],
       brand: ['Brand'],
-      category: ['Category'],
+      category: ['Post Category', 'Category'],
       topic: ['Topic/Intent', 'Topic', 'Intent'],
       title: ['Title'],
       liveUrl: ['Live URL', 'URL', 'Live Url'],
