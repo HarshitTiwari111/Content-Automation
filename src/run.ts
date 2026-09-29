@@ -90,9 +90,11 @@ function findTemplate(
   row: ArticleRow,
   templates: Map<string, CampaignTemplate>,
 ): CampaignTemplate | undefined {
-  // PDF section 13: Template naam row se aata hai, kahin aur se nahi.
+  // PDF section 13: Template naam row se aata hai.
+  // Sheet me Template column na ho aur sirf ek hi template bana ho, to wahi
+  // sab rows pe lagta hai — tab har row me naam likhne ki zarurat nahi.
   const wanted = row.template;
-  if (!wanted) return undefined;
+  if (!wanted) return templates.size === 1 ? [...templates.values()][0] : undefined;
 
   const key = wanted.trim().toLowerCase().replace(/\s+/g, ' ');
   const found = templates.get(key);

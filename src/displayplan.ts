@@ -31,13 +31,14 @@ export function displayCampaignName(
   row: ArticleRow,
   geo: string,
   resolvedSiteId?: string,
+  templateName?: string,
 ): string {
   return config.campaignNamePattern
     .replace('{site}', siteLabel(row, resolvedSiteId))
     .replace('{article_id}', row.articleId)
     .replace('SEARCH', config.display.channel)
     .replace('{geo}', geo)
-    .replace('{template}', row.template.toUpperCase());
+    .replace('{template}', (templateName || row.template).toUpperCase());
 }
 
 function titleCase(text: string): string {
@@ -135,7 +136,7 @@ export async function buildDisplayPlan(
   return {
     row,
     customerId,
-    campaignName: displayCampaignName(row, geo, resolvedSiteId),
+    campaignName: displayCampaignName(row, geo, resolvedSiteId, template?.name),
     dailyBudget,
     cpcBid: template?.maxBid ?? config.defaultCpcBid,
     geo,

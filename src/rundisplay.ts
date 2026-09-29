@@ -62,8 +62,9 @@ function findTemplate(
   row: ArticleRow,
   templates: Map<string, CampaignTemplate>,
 ): CampaignTemplate | undefined {
+  // Template column na ho aur sirf ek hi template bana ho, to wahi lagega.
   const wanted = row.template;
-  if (!wanted) return undefined;
+  if (!wanted) return templates.size === 1 ? [...templates.values()][0] : undefined;
   return templates.get(wanted.trim().toLowerCase().replace(/\s+/g, ' '));
 }
 

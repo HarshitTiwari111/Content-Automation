@@ -26,12 +26,17 @@ function siteLabel(row: ArticleRow, resolvedSiteId?: string): string {
 }
 
 /** SITE | ARTICLE_ID | SEARCH | GEO | TEMPLATE */
-export function campaignName(row: ArticleRow, geo: string, resolvedSiteId?: string): string {
+export function campaignName(
+  row: ArticleRow,
+  geo: string,
+  resolvedSiteId?: string,
+  templateName?: string,
+): string {
   return config.campaignNamePattern
     .replace('{site}', siteLabel(row, resolvedSiteId))
     .replace('{article_id}', row.articleId)
     .replace('{geo}', geo)
-    .replace('{template}', row.template.toUpperCase());
+    .replace('{template}', (templateName || row.template).toUpperCase());
 }
 
 /**
@@ -73,7 +78,7 @@ export async function buildPlan(
   return {
     row,
     customerId,
-    campaignName: campaignName(row, geo, resolvedSiteId),
+    campaignName: campaignName(row, geo, resolvedSiteId, template?.name),
     dailyBudget,
     cpcBid: template?.maxBid ?? config.defaultCpcBid,
     geo,
