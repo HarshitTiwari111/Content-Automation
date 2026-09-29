@@ -5,6 +5,7 @@ import { logger } from './logger.js';
 import type { ArticleRow, CampaignTemplate, DisplayAdCopy, DisplayPlan } from './types.js';
 import {
   assertRequiredFields,
+  assertTemplate,
   assertUrlReachable,
   resolveBudget,
   resolveExcludedDevices,
@@ -36,7 +37,7 @@ export function displayCampaignName(
     .replace('{article_id}', row.articleId)
     .replace('SEARCH', config.display.channel)
     .replace('{geo}', geo)
-    .replace('{template}', (row.template || config.defaultTemplate).toUpperCase());
+    .replace('{template}', row.template.toUpperCase());
 }
 
 function titleCase(text: string): string {
@@ -105,6 +106,7 @@ export async function buildDisplayPlan(
   template?: CampaignTemplate,
 ): Promise<DisplayPlan> {
   assertRequiredFields(row);
+  assertTemplate(row, template);
 
   if (!row.featuredImage) {
     throw new Error(

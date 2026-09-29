@@ -90,8 +90,8 @@ function findTemplate(
   row: ArticleRow,
   templates: Map<string, CampaignTemplate>,
 ): CampaignTemplate | undefined {
-  // Row me Template likha ho to wahi, warna config wala default template.
-  const wanted = row.template || config.defaultTemplate;
+  // PDF section 13: Template naam row se aata hai, kahin aur se nahi.
+  const wanted = row.template;
   if (!wanted) return undefined;
 
   const key = wanted.trim().toLowerCase().replace(/\s+/g, ' ');

@@ -14,6 +14,26 @@ export function assertRequiredFields(row: ArticleRow): void {
   }
 }
 
+/**
+ * PDF section 7/14: campaign banane se pehle template check hota hai.
+ * Row me Template naam hona chahiye, aur us naam ki row CAMPAIGN_TEMPLATES
+ * me honi chahiye — tabhi budget cap, GEO aur bid limit pakke hote hain.
+ */
+export function assertTemplate(row: ArticleRow, template?: CampaignTemplate): void {
+  if (!row.template) {
+    throw new Error(
+      'Template column khaali hai — CONTENT_QUEUE me us article ka Template bharo ' +
+        `(naam wahi jo ${config.campaignTemplates.tab} tab me hai).`,
+    );
+  }
+  if (!template) {
+    throw new Error(
+      `Template "${row.template}" ${config.campaignTemplates.tab} tab me nahi mila — ` +
+        'wahan isi naam ki row banao (Allowed GEOs, Daily Budget Cap, Max Bid, Default Status).',
+    );
+  }
+}
+
 function hostOf(value: string): string {
   return new URL(value).hostname.replace(/^www\./, '').toLowerCase();
 }

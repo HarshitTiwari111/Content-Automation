@@ -62,7 +62,7 @@ function findTemplate(
   row: ArticleRow,
   templates: Map<string, CampaignTemplate>,
 ): CampaignTemplate | undefined {
-  const wanted = row.template || config.defaultTemplate;
+  const wanted = row.template;
   if (!wanted) return undefined;
   return templates.get(wanted.trim().toLowerCase().replace(/\s+/g, ' '));
 }

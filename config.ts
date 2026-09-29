@@ -195,7 +195,11 @@ export const config = {
   campaignNamePattern: '{site} | {article_id} | SEARCH | {geo} | {template}',
   /** Jis row me Template column/value na ho, uske liye yahi template use hoga.
    *  CAMPAIGN_TEMPLATES tab me isi naam ki row honi chahiye. */
-  defaultTemplate: 'TEST20',
+  /**
+   * PDF section 8/13: har row apna Template khud batati hai (CONTENT_QUEUE ka
+   * Template column), aur usi naam ki row CAMPAIGN_TEMPLATES me hoti hai.
+   * Isliye koi "default template" nahi hai — khaali ho to row fail hogi.
+   */
 
   /** Sheet ------------------------------------------------------------------ */
   sheet: {

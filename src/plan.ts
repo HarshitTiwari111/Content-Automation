@@ -6,6 +6,7 @@ import { buildKeywords, negativeKeywords, toCriteria } from './keywords.js';
 import type { ArticleRow, CampaignPlan, CampaignTemplate } from './types.js';
 import {
   assertRequiredFields,
+  assertTemplate,
   assertUrlReachable,
   resolveBudget,
   resolveExcludedDevices,
@@ -30,7 +31,7 @@ export function campaignName(row: ArticleRow, geo: string, resolvedSiteId?: stri
     .replace('{site}', siteLabel(row, resolvedSiteId))
     .replace('{article_id}', row.articleId)
     .replace('{geo}', geo)
-    .replace('{template}', (row.template || config.defaultTemplate).toUpperCase());
+    .replace('{template}', row.template.toUpperCase());
 }
 
 /**
@@ -44,6 +45,7 @@ export async function buildPlan(
   template?: CampaignTemplate,
 ): Promise<CampaignPlan> {
   assertRequiredFields(row);
+  assertTemplate(row, template);
 
   const dailyBudget = resolveBudget(row, template);
   const { geo, geoTargetId } = resolveGeo(row, template);
