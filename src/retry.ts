@@ -19,7 +19,18 @@ const RETRYABLE = [
   // AbortSignal.timeout() aisa message deta hai
   'aborted due to timeout',
   'TimeoutError',
+  // Google Sheets/Ads ki "ek minute me itni hi" wali limit — thodi der me khud khul jaati hai
+  'Quota exceeded',
+  'rateLimitExceeded',
+  'userRateLimitExceeded',
+  'RESOURCE_EXHAUSTED',
 ];
+
+/** Limit wali galti? Inme 2 second ka intezaar kaafi nahi hota. */
+function isQuota(error: unknown): boolean {
+  const text = error instanceof Error ? error.message : String(error);
+  return /quota|rate limit|ratelimit|RESOURCE_EXHAUSTED/i.test(text);
+}
 
 function isRetryable(error: unknown): boolean {
   const text =
@@ -50,7 +61,8 @@ export async function withRetry<T>(what: string, action: () => Promise<T>): Prom
       lastError = error;
       if (!isRetryable(error) || attempt === attempts) break;
 
-      const delay = 2000 * attempt;
+      // Sheet ki limit ek minute wali hoti hai, isliye usme zyada rukna padta hai.
+      const delay = (isQuota(error) ? 30_000 : 2000) * attempt;
       logger.warn(
         `${what} — network problem (try ${attempt}/${attempts}). ${delay / 1000}s baad dobara koshish...`,
       );

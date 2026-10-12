@@ -263,6 +263,8 @@ export const config = {
       clicks: ['Clicks'],
       spend: ['Spend', 'Cost'],
       cpc: ['CPC', 'Avg CPC', 'Average CPC'],
+      conversions: ['Conversions', 'Leads', 'Goal Conversions', 'Conversion'],
+      costPerConversion: ['Cost / Conv', 'CPA', 'Cost Per Conversion', 'Cost / Conv.'],
       campaignState: ['Status', 'Campaign Status', 'Campaign State'],
       lastSync: ['Last Sync', 'Last Synced', 'Synced'],
     } as Record<string, string[]>,
@@ -352,6 +354,14 @@ export const config = {
 
   /** Sheet me date/time isi zone me likhi jaati hai. */
   timeZone: 'Asia/Kolkata',
+
+  /** Conversion Tracking Settings ------------------------------------------- */
+  conversion: {
+    enabled: true,
+    goalName: 'Page view lead',
+    category: 'PAGE_VIEW',
+    type: 'WEBPAGE',
+  },
 
   /** How many rows one run may process. Safety brake. */
   maxRowsPerRun: 20,

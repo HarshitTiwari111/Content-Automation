@@ -19,9 +19,10 @@ import {
   readSiteIds,
   siteKey,
   today,
-  upsertReportRow,
-  writeBack,
+  upsertReportRows,
+  writeBackMany,
 } from '../src/sheet.js';
+import type { ReportRow } from '../src/sheet.js';
 import type { ArticleRow } from '../src/types.js';
 
 setDefaultResultOrder('ipv4first');
@@ -34,6 +35,8 @@ interface AdsRow {
     impressions?: string | number;
     costMicros?: string | number;
     averageCpc?: string | number;
+    conversions?: string | number;
+    costPerConversion?: string | number;
   };
 }
 
@@ -137,6 +140,7 @@ async function main(): Promise<void> {
   await assertAdsAccess([...byAccount.keys()]);
 
   const totals = new Map<number, RowTotal>();
+  const reportRows: ReportRow[] = [];
   let updated = 0;
   let failed = 0;
 
@@ -169,7 +173,8 @@ async function main(): Promise<void> {
         const response = (await searchAds(
           customerId,
           'SELECT campaign.id, campaign.status, segments.date, metrics.clicks, ' +
-            'metrics.impressions, metrics.cost_micros, metrics.average_cpc ' +
+            'metrics.impressions, metrics.cost_micros, metrics.average_cpc, ' +
+            'metrics.conversions, metrics.cost_per_conversion ' +
             `FROM campaign WHERE campaign.id IN (${ids}) ` +
             `AND segments.date DURING ${config.report.dateRange}`,
         )) as { results?: AdsRow[] };
@@ -214,15 +219,17 @@ async function main(): Promise<void> {
 
         let clicksSum = 0;
         let spendSum = 0;
-        try {
-          // PDF section 13: "Daily/weekly clicks, spend, CPC and campaign state".
+        {
           for (const day of days) {
             const clicks = Number(day.metrics?.clicks ?? 0);
             const spend = toUnits(day.metrics?.costMicros);
+            const conversions = Number(day.metrics?.conversions ?? 0);
+            const costPerConversion = toUnits(day.metrics?.costPerConversion);
             clicksSum += clicks;
             spendSum += spend;
 
-            await upsertReportRow({
+            // Sheet me ek-ek karke nahi likhte — sab jama karke aakhir me ek saath.
+            reportRows.push({
               date: toSheetDate(day.segments?.date),
               articleId: row.articleId,
               liveUrl: row.liveUrl,
@@ -231,9 +238,10 @@ async function main(): Promise<void> {
               clicks,
               spend,
               cpc: toUnits(day.metrics?.averageCpc),
+              conversions,
+              costPerConversion,
               campaignState: toState(status || String(day.campaign?.status ?? '').toUpperCase()),
             });
-            updated += 1;
           }
 
           total.clicks += clicksSum;
@@ -243,18 +251,24 @@ async function main(): Promise<void> {
             `${row.articleId} (${source}): ${days.length} din, ${clicksSum} clicks, ` +
               `${Math.round(spendSum * 100) / 100} spend — state ${toState(status) || '?'}`,
           );
-        } catch (error) {
-          logger.error(
-            `${row.articleId}: Sheet me likhne me problem — ` +
-              (error instanceof Error ? error.message : String(error)),
-          );
-          failed += 1;
         }
       }
     }
   }
 
   // CONTENT_QUEUE me poore range ka jod — wahan har article ki ek hi row hai.
+  // REPORTING tab — saari rows ek hi baar me.
+  try {
+    updated = await upsertReportRows(reportRows);
+  } catch (error) {
+    logger.error(
+      `${config.report.tab} me likhne me problem — ` +
+        (error instanceof Error ? error.message : String(error)),
+    );
+    failed += reportRows.length;
+  }
+
+  const queueUpdates: Array<{ rowNumber: number; updates: Record<string, string> }> = [];
   for (const total of totals.values()) {
     const spend = Math.round(total.spend * 100) / 100;
     const cpc = total.clicks > 0 ? Math.round((total.spend / total.clicks) * 100) / 100 : 0;
@@ -270,16 +284,21 @@ async function main(): Promise<void> {
         : {}),
     };
     if (Object.keys(updates).length === 0) continue;
+    queueUpdates.push({ rowNumber: total.row.rowNumber, updates });
+  }
 
-    try {
-      await writeBack(total.row.rowNumber, updates);
-    } catch (error) {
-      logger.error(
-        `${total.row.articleId}: ${env.sheetTab} me likhne me problem — ` +
-          (error instanceof Error ? error.message : String(error)),
-      );
-      failed += 1;
+  // CONTENT_QUEUE ke saare update bhi ek hi call me.
+  try {
+    await writeBackMany(queueUpdates);
+    if (queueUpdates.length > 0) {
+      logger.info(`📄 ${env.sheetTab} ki ${queueUpdates.length} rows update hui`);
     }
+  } catch (error) {
+    logger.error(
+      `${env.sheetTab} me likhne me problem — ` +
+        (error instanceof Error ? error.message : String(error)),
+    );
+    failed += queueUpdates.length;
   }
 
   logger.blank();

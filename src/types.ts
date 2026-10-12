@@ -118,3 +118,13 @@ export interface RowOutcome {
   campaignId?: string;
   reason?: string;
 }
+
+/** Google Ads Conversion Action result. */
+export interface ConversionActionResult {
+  resourceName: string;
+  conversionActionId: string;
+  conversionId?: string;
+  conversionLabel?: string;
+  alreadyExisted: boolean;
+}
+

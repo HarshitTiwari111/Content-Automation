@@ -1,7 +1,8 @@
+import { config } from '../config.js';
 import { assertAdsEnv, env } from './env.js';
 import { logger } from './logger.js';
 import { withRetry } from './retry.js';
-import type { CampaignPlan, CampaignResult } from './types.js';
+import type { CampaignPlan, CampaignResult, ConversionActionResult } from './types.js';
 
 /**
  * Google Ads REST API, proxy ke through.
@@ -295,6 +296,94 @@ export async function mutateResource(
 }
 
 /**
+ * Ensures a conversion action (e.g. 'Submit lead form') exists in the customer account.
+ * If it already exists, returns its ID & Resource Name.
+ * If not, creates it via REST mutate and returns the newly created resource.
+ *
+ * Fail-safe: If API call fails or permission missing, logs a warning without breaking campaign creation.
+ */
+export async function ensureConversionAction(
+  customerId: string,
+  actionName: string = config.conversion.goalName,
+  category: string = config.conversion.category,
+): Promise<ConversionActionResult | null> {
+  if (!config.conversion.enabled) return null;
+
+  try {
+    const literal = (text: string): string =>
+      text.replace(/[[\]%_]/g, (c) => `[${c}]`).replace(/'/g, "\\'");
+
+    const query =
+      'SELECT conversion_action.id, conversion_action.name, conversion_action.category, ' +
+      'conversion_action.type, conversion_action.status ' +
+      'FROM conversion_action ' +
+      `WHERE conversion_action.name = '${literal(actionName)}' ` +
+      "AND conversion_action.status != 'REMOVED'";
+
+    const searchResult = (await searchAds(customerId, query)) as {
+      results?: Array<{
+        conversionAction?: {
+          id?: string;
+          name?: string;
+          category?: string;
+          type?: string;
+          status?: string;
+        };
+      }>;
+    };
+
+    const existing = searchResult.results?.[0]?.conversionAction;
+    if (existing?.id) {
+      const conversionActionId = String(existing.id);
+      logger.info(
+        `🎯 Conversion Action active hai: "${existing.name}" (ID ${conversionActionId})`,
+      );
+      return {
+        resourceName: `customers/${customerId}/conversionActions/${conversionActionId}`,
+        conversionActionId,
+        alreadyExisted: true,
+      };
+    }
+
+    logger.info(`⚙️ Conversion Action create ho raha hai: "${actionName}" (${category})...`);
+    const resourceName = await mutateResource(
+      customerId,
+      'conversionActions',
+      [
+        {
+          create: {
+            name: actionName,
+            category: category,
+            type: config.conversion.type,
+            status: 'ENABLED',
+            valueSettings: {
+              defaultValue: 1.0,
+              alwaysUseDefaultValue: true,
+            },
+          },
+        },
+      ],
+      'Conversion Action',
+    );
+
+    const conversionActionId = idFromResourceName(resourceName);
+    logger.step(`✅ Conversion Action create hua: ID ${conversionActionId}`);
+
+    return {
+      resourceName,
+      conversionActionId,
+      alreadyExisted: false,
+    };
+  } catch (error) {
+    logger.warn(
+      `Conversion Action auto-setup notice: ${describeAdsError(error)}`,
+    );
+    return null;
+  }
+}
+
+
+/**
  * Image ko Google Ads me asset banake uska resource name laata hai.
  * Responsive Display Ad me image seedhe nahi ja sakti — pehle asset banti hai.
  */
@@ -344,6 +433,9 @@ export async function createSearchCampaign(plan: CampaignPlan): Promise<Campaign
 
   // Budget banne se pehle — warna duplicate pe bekaar budget reh jaata hai.
   await assertNoExistingCampaign(plan.customerId, plan.row.articleId, 'SEARCH');
+
+  // Conversion Action setup
+  await ensureConversionAction(plan.customerId);
 
   // 1. Daily budget (kisi aur campaign ke saath share nahi).
   const budgetResourceName = await mutateResource(

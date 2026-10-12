@@ -473,6 +473,8 @@ export interface ReportRow {
   clicks: number;
   spend: number;
   cpc: number;
+  conversions?: number;
+  costPerConversion?: number;
   /** LIVE / PAUSED / REMOVED — PDF section 13 ka "campaign state". */
   campaignState: string;
 }
@@ -519,6 +521,8 @@ export async function upsertReportRow(entry: ReportRow): Promise<void> {
   put('clicks', String(entry.clicks));
   put('spend', String(entry.spend));
   put('cpc', String(entry.cpc));
+  if (entry.conversions !== undefined) put('conversions', String(entry.conversions));
+  if (entry.costPerConversion !== undefined) put('costPerConversion', String(entry.costPerConversion));
   put('campaignState', entry.campaignState);
   put('lastSync', sheetTimestamp());
 
@@ -749,6 +753,157 @@ export async function appendCampaignRecord(record: CampaignRecord): Promise<void
   );
 }
 
+/**
+ * Kai reporting rows ek saath.
+ * REPORTING tab ek hi baar padha jaata hai aur sab kuch ek hi call me likha
+ * jaata hai — warna Google ki "write per minute" limit tut jaati hai.
+ */
+export async function upsertReportRows(entries: ReportRow[]): Promise<number> {
+  if (entries.length === 0) return 0;
+
+  const sheets = getClient();
+  const tab = config.report.tab;
+
+  const response = await withRetry(`${tab} padhna`, () =>
+    sheets.spreadsheets.values.get({ spreadsheetId: env.sheetId, range: `${tab}!A1:Z` }),
+  );
+
+  const values = (response.data.values ?? []) as string[][];
+  const reportHeaders = (values[0] ?? []).map((h) => (h ?? '').toString());
+  if (reportHeaders.length === 0) {
+    throw new Error(`${tab} tab khaali hai — row 1 me headers hone chahiye.`);
+  }
+
+  const at = (field: string): number => {
+    const aliases = config.report.columns[field] ?? [];
+    return reportHeaders.findIndex((header) =>
+      aliases.some((alias) => normalise(alias) === normalise(header)),
+    );
+  };
+
+  const articleIdx = at('articleId');
+  const dateIdx = at('date');
+  const sourceIdx = at('trafficSource');
+
+  const buildRow = (entry: ReportRow): string[] => {
+    const row: string[] = new Array(reportHeaders.length).fill('');
+    const put = (field: string, value: string): void => {
+      const i = at(field);
+      if (i !== -1) row[i] = value;
+    };
+    put('date', entry.date);
+    put('articleId', entry.articleId);
+    put('liveUrl', entry.liveUrl);
+    put('trafficSource', entry.trafficSource);
+    put('impressions', String(entry.impressions));
+    put('clicks', String(entry.clicks));
+    put('spend', String(entry.spend));
+    put('cpc', String(entry.cpc));
+    if (entry.conversions !== undefined) put('conversions', String(entry.conversions));
+    if (entry.costPerConversion !== undefined) {
+      put('costPerConversion', String(entry.costPerConversion));
+    }
+    put('campaignState', entry.campaignState);
+    put('lastSync', sheetTimestamp());
+    return row;
+  };
+
+  const keyOf = (article: string, date: string, source: string): string =>
+    `${article}|||${date}|||${source}`;
+
+  // Pehle se kaunsi row kahan hai.
+  const existing = new Map<string, number>();
+  if (articleIdx !== -1) {
+    for (let i = 1; i < values.length; i += 1) {
+      const raw = values[i] ?? [];
+      const key = keyOf(
+        (raw[articleIdx] ?? '').toString().trim(),
+        dateIdx === -1 ? '' : (raw[dateIdx] ?? '').toString().trim(),
+        sourceIdx === -1 ? '' : (raw[sourceIdx] ?? '').toString().trim(),
+      );
+      if (!existing.has(key)) existing.set(key, i + 1); // 1-based
+    }
+  }
+
+  const data: sheets_v4.Schema$ValueRange[] = [];
+  const appends: string[][] = [];
+  const appendAt = new Map<string, number>();
+
+  for (const entry of entries) {
+    const key = keyOf(
+      entry.articleId,
+      dateIdx === -1 ? '' : entry.date,
+      sourceIdx === -1 ? '' : entry.trafficSource,
+    );
+    const row = buildRow(entry);
+
+    const rowNumber = existing.get(key);
+    if (rowNumber !== undefined) {
+      data.push({ range: `${tab}!A${rowNumber}`, values: [row] });
+      continue;
+    }
+
+    const already = appendAt.get(key);
+    if (already !== undefined) {
+      appends[already] = row; // usi din ki dobara aayi row — nayi value rakho
+      continue;
+    }
+    appendAt.set(key, appends.length);
+    appends.push(row);
+  }
+
+  if (data.length > 0) {
+    await withRetry(`${tab} update karna`, () =>
+      sheets.spreadsheets.values.batchUpdate({
+        spreadsheetId: env.sheetId,
+        requestBody: { valueInputOption: 'USER_ENTERED', data },
+      }),
+    );
+  }
+  if (appends.length > 0) {
+    await withRetry(`${tab} me likhna`, () =>
+      sheets.spreadsheets.values.append({
+        spreadsheetId: env.sheetId,
+        range: `${tab}!A1`,
+        valueInputOption: 'USER_ENTERED',
+        insertDataOption: 'INSERT_ROWS',
+        requestBody: { values: appends },
+      }),
+    );
+  }
+
+  return entries.length;
+}
+
+/** Kai rows ke update ek hi call me — Sheet ki write limit bachane ke liye. */
+export async function writeBackMany(
+  rows: Array<{ rowNumber: number; updates: Partial<Record<string, string>> }>,
+): Promise<void> {
+  const sheets = getClient();
+
+  const data: sheets_v4.Schema$ValueRange[] = [];
+  for (const { rowNumber, updates } of rows) {
+    for (const [field, value] of Object.entries(updates)) {
+      if (value === undefined) continue;
+      const index = columnIndex(field);
+      if (index === -1) continue;
+      data.push({
+        range: `${env.sheetTab}!${columnLetter(index)}${rowNumber}`,
+        values: [[value]],
+      });
+    }
+  }
+
+  if (data.length === 0) return;
+
+  await withRetry(`${env.sheetTab} me likhna`, () =>
+    sheets.spreadsheets.values.batchUpdate({
+      spreadsheetId: env.sheetId,
+      requestBody: { valueInputOption: 'RAW', data },
+    }),
+  );
+}
+
 /** Writes values back into one row. Keys are internal field names. */
 export async function writeBack(
   rowNumber: number,
@@ -769,8 +924,10 @@ export async function writeBack(
 
   if (data.length === 0) return;
 
-  await sheets.spreadsheets.values.batchUpdate({
-    spreadsheetId: env.sheetId,
-    requestBody: { valueInputOption: 'RAW', data },
-  });
+  await withRetry(`${env.sheetTab} me likhna`, () =>
+    sheets.spreadsheets.values.batchUpdate({
+      spreadsheetId: env.sheetId,
+      requestBody: { valueInputOption: 'RAW', data },
+    }),
+  );
 }

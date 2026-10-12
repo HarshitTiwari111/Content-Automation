@@ -3,6 +3,7 @@ import { env } from './env.js';
 import {
   assertNoExistingCampaign,
   deviceCriteria,
+  ensureConversionAction,
   mutateResource,
   PartialCampaignError,
   uploadImageAsset,
@@ -50,6 +51,9 @@ export async function createDisplayCampaign(plan: DisplayPlan): Promise<Campaign
 
   // Kuch bhi upload/banane se pehle — PDF section 14 ka duplicate check.
   await assertNoExistingCampaign(plan.customerId, plan.row.articleId, config.display.channel);
+
+  // Conversion Action setup
+  await ensureConversionAction(plan.customerId);
 
   // 1. Images pehle — ye sabse zyada fail hone wala step hai, isliye campaign
   //    banane se pehle kar lete hain. Fail hua to kuch bana hi nahi hoga.
