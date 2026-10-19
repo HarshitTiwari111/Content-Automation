@@ -409,7 +409,8 @@ export async function uploadImageAsset(
 }
 
 /**
- * Creates the whole Search campaign, always PAUSED:
+ * Poori Search campaign banata hai. Campaign hamesha PAUSED rehti hai;
+ * ad group aur ad ENABLED bante hain, taaki campaign enable karte hi ad chalu ho jaye:
  *   budget -> campaign -> geo/language/negatives -> ad group -> keywords -> RSA
  * In dry-run mode nothing is sent; fake ids are returned instead.
  */
@@ -525,7 +526,7 @@ export async function createSearchCampaign(plan: CampaignPlan): Promise<Campaign
       logger.step(`📱 In devices pe ad band: ${plan.excludedDevices.join(', ')}`);
     }
 
-    // 4. Ad group — ye bhi PAUSED.
+    // 4. Ad group — ENABLED (campaign PAUSED hai, isliye kuch chalega nahi).
     const adGroupResourceName = await mutateResource(
       plan.customerId,
       'adGroups',
@@ -534,7 +535,7 @@ export async function createSearchCampaign(plan: CampaignPlan): Promise<Campaign
           create: {
             name: `${plan.campaignName} | AG1`,
             campaign: campaignResourceName,
-            status: 'PAUSED',
+            status: 'ENABLED',
             type: 'SEARCH_STANDARD',
             cpcBidMicros: toMicros(plan.cpcBid),
           },
@@ -543,7 +544,7 @@ export async function createSearchCampaign(plan: CampaignPlan): Promise<Campaign
       'Ad group',
     );
     const adGroupId = idFromResourceName(adGroupResourceName);
-    logger.step('📁 Ad group bana (PAUSED)');
+    logger.step('📁 Ad group bana (ENABLED)');
 
     // 5. Keywords (with policy error fallback so policy-safe keywords get added).
     let keywordCount = plan.keywords.length;
@@ -610,7 +611,7 @@ export async function createSearchCampaign(plan: CampaignPlan): Promise<Campaign
         {
           create: {
             adGroup: adGroupResourceName,
-            status: 'PAUSED',
+            status: 'ENABLED',
             ad: {
               finalUrls: [plan.finalUrl],
               responsiveSearchAd: {

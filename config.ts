@@ -13,9 +13,10 @@ export const config = {
     enabled: process.env.PAID_TRAFFIC_KILL_SWITCH === 'true' || process.env.KILL_SWITCH === 'true',
   },
 
-  // NOTE: campaign/ad group/ad status is NOT configurable on purpose.
-  // It is hardcoded to PAUSED inside src/googleads.ts so that no setting,
-  // Sheet value or typo can ever create a spending campaign.
+  // NOTE: campaign ka status jaanbujh ke configurable nahi hai.
+  // Campaign hamesha PAUSED banti hai (src/googleads.ts me fix hai); ad group
+  // aur ad ENABLED bante hain, taaki campaign enable karte hi ad chalu ho jaye.
+  // Koi setting, Sheet value ya typo campaign ko apne aap chalu nahi kar sakta.
 
   /** Money / bidding -------------------------------------------------------- */
   budget: {

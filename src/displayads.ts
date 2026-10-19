@@ -20,8 +20,9 @@ import type { CampaignResult, DisplayPlan } from './types.js';
  *   - keywords nahi lagte
  *   - ad ke liye do images chahiye (1.91:1 aur 1:1), jo pehle asset banti hain
  *
- * Search ki tarah yahan bhi campaign, ad group aur ad — teeno PAUSED hi bante
- * hain. Ye rule badla nahi ja sakta.
+ * Search ki tarah yahan bhi campaign PAUSED hi banti hai; ad group aur ad
+ * ENABLED bante hain. Campaign PAUSED hai to kuch chalta nahi — paisa tabhi
+ * lagega jab tum khud campaign enable karoge.
  */
 
 /** 1 unit = 1,000,000 micros. */
@@ -140,7 +141,7 @@ export async function createDisplayCampaign(plan: DisplayPlan): Promise<Campaign
       logger.step(`📱 In devices pe ad band: ${plan.excludedDevices.join(', ')}`);
     }
 
-    // 5. Ad group — ye bhi PAUSED.
+    // 5. Ad group — ENABLED (campaign PAUSED hai, isliye kuch chalega nahi).
     const adGroupResourceName = await mutateResource(
       plan.customerId,
       'adGroups',
@@ -149,7 +150,7 @@ export async function createDisplayCampaign(plan: DisplayPlan): Promise<Campaign
           create: {
             name: `${plan.campaignName} | AG1`,
             campaign: campaignResourceName,
-            status: 'PAUSED',
+            status: 'ENABLED',
             type: 'DISPLAY_STANDARD',
             cpcBidMicros: toMicros(plan.cpcBid),
           },
@@ -158,7 +159,7 @@ export async function createDisplayCampaign(plan: DisplayPlan): Promise<Campaign
       'Ad group',
     );
     const adGroupId = idFromResourceName(adGroupResourceName);
-    logger.step('📁 Ad group bana (PAUSED)');
+    logger.step('📁 Ad group bana (ENABLED)');
 
     // 6. Responsive Display Ad.
     await mutateResource(
@@ -168,7 +169,7 @@ export async function createDisplayCampaign(plan: DisplayPlan): Promise<Campaign
         {
           create: {
             adGroup: adGroupResourceName,
-            status: 'PAUSED',
+            status: 'ENABLED',
             ad: {
               finalUrls: [plan.finalUrl],
               responsiveDisplayAd: {
