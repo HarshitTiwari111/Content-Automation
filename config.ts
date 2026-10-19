@@ -152,6 +152,11 @@ export const config = {
   display: {
     /** Campaign ke naam ka CHANNEL hissa. */
     channel: 'DISPLAY',
+    /**
+     * Post Category = Brand wali row me Display (Y/N) apne aap "Yes" ho jaye.
+     * Generic rows ko haath nahi lagata, aur bhari hui cell nahi badalta.
+     */
+    autoYesForBrand: true,
     /** PDF section 11: Display ka apna UTM. */
     utmSuffix: 'utm_source=google&utm_medium=display&utm_campaign={article_id}',
     rda: {
@@ -175,6 +180,19 @@ export const config = {
       /** Image download ka time. */
       timeoutMs: 30_000,
     },
+  },
+
+  /**
+   * Featured Image apne aap bharna ------------------------------------------
+   * Live URL kholke us article ki og:image (jo page preview me dikhti hai)
+   * uthata hai aur Featured Image column me likh deta hai. Bhari hui cell
+   * kabhi nahi badalta.
+   */
+  featuredImage: {
+    autoFill: true,
+    /** Ek run me itne hi pages kholega — run lamba na ho jaye. */
+    maxPerRun: 20,
+    timeoutMs: 20_000,
   },
 
   /** Responsive Search Ad — Google's hard limits, do not raise. --------------- */

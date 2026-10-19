@@ -13,6 +13,7 @@ import {
 import { assertAccountBudget } from './validate.js';
 import { killSwitchSource, pauseAllCampaigns } from './killswitch.js';
 import { logger } from './logger.js';
+import { prepareDisplayRows } from './prepare.js';
 import {
   adsAllowedByCategory,
   appendErrorLog,
@@ -228,6 +229,9 @@ async function main(): Promise<void> {
         'galti theek karke Status khaali karoge tabhi dobara try hongi',
     );
   }
+
+  // Brand wali rows me Display = Yes aur khaali Featured Image khud bhar do.
+  await prepareDisplayRows(allRows);
 
   // PDF section 4 ka content type — Sheet me Category = Brand par hi ad chalti hai.
   if (!hasCategoryColumn()) {
