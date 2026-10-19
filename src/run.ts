@@ -12,6 +12,7 @@ import {
 import { assertAccountBudget } from './validate.js';
 import { killSwitchSource, pauseAllCampaigns } from './killswitch.js';
 import { logger } from './logger.js';
+import { findTemplateFor, templateLabel } from './templates.js';
 import { buildPlan } from './plan.js';
 import {
   adsAllowedByCategory,
@@ -90,24 +91,14 @@ function findTemplate(
   row: ArticleRow,
   templates: Map<string, CampaignTemplate>,
 ): CampaignTemplate | undefined {
-  // PDF section 13: Template naam row se aata hai.
-  // Sheet me Template column na ho aur sirf ek hi template bana ho, to wahi
-  // sab rows pe lagta hai — tab har row me naam likhne ki zarurat nahi.
-  const wanted = row.template;
-  if (!wanted) return templates.size === 1 ? [...templates.values()][0] : undefined;
-
-  const key = wanted.trim().toLowerCase().replace(/\s+/g, ' ');
-  const found = templates.get(key);
+  // Template column, warna row ka Topic/Intent, warna ek hi bana hua template.
+  const found = findTemplateFor(row, templates);
 
   if (!found) {
-    // Row me naam likha tha par mila nahi — ye batana zaroori hai.
-    // Default template na mile to chup rehna theek hai (shayad tab hi khaali hai).
-    if (row.template) {
-      logger.warn(
-        `Template "${row.template}" ${config.campaignTemplates.tab} me nahi mila — ` +
-          'config ke defaults use ho rahe hain.',
-      );
-    }
+    logger.warn(
+      `Template nahi mila (Topic/Intent: "${row.topic}") — ` +
+        `${config.campaignTemplates.tab} me isi naam ki row banao.`,
+    );
     return undefined;
   }
 

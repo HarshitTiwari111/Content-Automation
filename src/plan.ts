@@ -2,6 +2,7 @@ import { config } from '../config.js';
 import { buildAdCopy } from './adcopy.js';
 import { generateAiPlan } from './aicopy.js';
 import { logger } from './logger.js';
+import { templateLabel } from './templates.js';
 import { buildKeywords, negativeKeywords, toCriteria } from './keywords.js';
 import type { ArticleRow, CampaignPlan, CampaignTemplate } from './types.js';
 import {
@@ -78,7 +79,7 @@ export async function buildPlan(
   return {
     row,
     customerId,
-    campaignName: campaignName(row, geo, resolvedSiteId, template?.name),
+    campaignName: campaignName(row, geo, resolvedSiteId, templateLabel(row, template)),
     dailyBudget,
     cpcBid: template?.maxBid ?? config.defaultCpcBid,
     geo,

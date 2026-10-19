@@ -2,6 +2,7 @@ import { config } from '../config.js';
 import { sentence, smartTrim } from './adcopy.js';
 import { generateAiPlan } from './aicopy.js';
 import { logger } from './logger.js';
+import { templateLabel } from './templates.js';
 import type { ArticleRow, CampaignTemplate, DisplayAdCopy, DisplayPlan } from './types.js';
 import {
   assertRequiredFields,
@@ -136,7 +137,7 @@ export async function buildDisplayPlan(
   return {
     row,
     customerId,
-    campaignName: displayCampaignName(row, geo, resolvedSiteId, template?.name),
+    campaignName: displayCampaignName(row, geo, resolvedSiteId, templateLabel(row, template)),
     dailyBudget,
     cpcBid: template?.maxBid ?? config.defaultCpcBid,
     geo,

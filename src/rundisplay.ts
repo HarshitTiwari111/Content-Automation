@@ -14,6 +14,7 @@ import { assertAccountBudget } from './validate.js';
 import { killSwitchSource, pauseAllCampaigns } from './killswitch.js';
 import { logger } from './logger.js';
 import { prepareDisplayRows } from './prepare.js';
+import { findTemplateFor } from './templates.js';
 import {
   adsAllowedByCategory,
   appendErrorLog,
@@ -63,10 +64,8 @@ function findTemplate(
   row: ArticleRow,
   templates: Map<string, CampaignTemplate>,
 ): CampaignTemplate | undefined {
-  // Template column na ho aur sirf ek hi template bana ho, to wahi lagega.
-  const wanted = row.template;
-  if (!wanted) return templates.size === 1 ? [...templates.values()][0] : undefined;
-  return templates.get(wanted.trim().toLowerCase().replace(/\s+/g, ' '));
+  // Template column, warna row ka Topic/Intent, warna ek hi bana hua template.
+  return findTemplateFor(row, templates);
 }
 
 /** Display = YES, campaign ID khaali, URL aur image maujood. */
