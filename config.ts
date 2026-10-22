@@ -332,7 +332,25 @@ export const config = {
     columns: {
       siteId: ['Site ID', 'SiteID', 'Site Id'],
       domain: ['Domain URL', 'Domain', 'Website', 'Website URL'],
+      /** `npm run health` yahan us site ki samasyaon ka saaransh likhta hai. */
+      issue: ['Issue', 'Issues', 'Issue / Status', 'Health'],
     } as Record<string, string[]>,
+  },
+
+  /**
+   * Health check (`npm run health`) — Google Ads se poochta hai ki kahin
+   * budget khatam, ad disapproved ya campaign band to nahi. Jo mile wo
+   * WEBSITE_CONFIG ke Issue column me likh deta hai.
+   */
+  health: {
+    /** Itne din ka data dekhta hai. */
+    lookbackDays: 7,
+    /** Account budget ka itna hissa kharch ho gaya to "khatam hone wala" maana jaata hai. */
+    budgetWarnRatio: 0.9,
+    /** Issue column me itne se zyada akshar nahi likhega. */
+    maxIssueChars: 450,
+    /** Disapproved ads ki detail CONTENT_QUEUE/ERROR_LOG me bhi likhe. */
+    writeArticleIssues: true,
   },
 
   /**

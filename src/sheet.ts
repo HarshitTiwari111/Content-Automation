@@ -383,6 +383,97 @@ export async function readSiteIds(): Promise<Map<string, string>> {
   return map;
 }
 
+/** WEBSITE_CONFIG ki ek row — health check ko row number chahiye hota hai. */
+export interface WebsiteConfigRow {
+  rowNumber: number;
+  siteId: string;
+  domain: string;
+}
+
+/** WEBSITE_CONFIG ki saari site rows (row number ke saath). */
+export async function readWebsiteConfigRows(): Promise<WebsiteConfigRow[]> {
+  const sheets = getClient();
+  const tab = config.websiteConfig.tab;
+
+  let values: string[][] = [];
+  try {
+    const response = await withRetry(`${tab} padhna`, () =>
+      sheets.spreadsheets.values.get({
+        spreadsheetId: env.sheetId,
+        range: `${tab}!A1:Z`,
+        valueRenderOption: 'UNFORMATTED_VALUE',
+      }),
+    );
+    values = (response.data.values ?? []) as string[][];
+  } catch {
+    return [];
+  }
+
+  if (values.length < 2) return [];
+
+  const headersRow = (values[0] ?? []).map((h) => (h ?? '').toString());
+  const at = (field: string): number => {
+    const aliases = config.websiteConfig.columns[field] ?? [];
+    return headersRow.findIndex((header) => aliases.some((a) => normalise(a) === normalise(header)));
+  };
+
+  const siteIdIndex = at('siteId');
+  const domainIndex = at('domain');
+  if (siteIdIndex === -1) return [];
+
+  const rows: WebsiteConfigRow[] = [];
+  for (let i = 1; i < values.length; i += 1) {
+    const raw = (values[i] ?? []) as string[];
+    const siteId = (raw[siteIdIndex] ?? '').toString().trim();
+    if (!siteId) continue;
+
+    const domain = domainIndex === -1 ? '' : (raw[domainIndex] ?? '').toString().trim();
+    // Tab ke neeche "total generic / total post" jaisi ginti wali lines bhi
+    // hoti hain — unme domain nahi hota, isliye wo site nahi maani jaatin.
+    if (domainIndex !== -1 && !domain) continue;
+
+    rows.push({ rowNumber: i + 1, siteId, domain });
+  }
+  return rows;
+}
+
+/**
+ * WEBSITE_CONFIG ke "Issue" column me saaransh likhta hai.
+ * Column na ho to false — kaam rukta nahi, bas likha nahi jaata.
+ */
+export async function writeWebsiteIssues(
+  entries: Array<{ rowNumber: number; issue: string }>,
+): Promise<boolean> {
+  if (entries.length === 0) return true;
+
+  const sheets = getClient();
+  const tab = config.websiteConfig.tab;
+
+  const response = await withRetry(`${tab} padhna`, () =>
+    sheets.spreadsheets.values.get({ spreadsheetId: env.sheetId, range: `${tab}!A1:Z1` }),
+  );
+  const headersRow = (response.data.values?.[0] ?? []).map((h) => (h ?? '').toString());
+
+  const aliases = config.websiteConfig.columns.issue ?? ['Issue'];
+  const index = headersRow.findIndex((header) =>
+    aliases.some((alias) => normalise(alias) === normalise(header)),
+  );
+  if (index === -1) return false;
+
+  const data = entries.map((entry) => ({
+    range: `${tab}!${columnLetter(index)}${entry.rowNumber}`,
+    values: [[safeCell(entry.issue)]],
+  }));
+
+  await withRetry(`${tab} me likhna`, () =>
+    sheets.spreadsheets.values.batchUpdate({
+      spreadsheetId: env.sheetId,
+      requestBody: { valueInputOption: 'USER_ENTERED', data },
+    }),
+  );
+  return true;
+}
+
 /** AD_ACCOUNT_MAP tab ka kaccha data + column dhoondhne ka helper. */
 interface AccountMapData {
   headers: string[];

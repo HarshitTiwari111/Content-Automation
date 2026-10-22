@@ -17,7 +17,8 @@
     "display": "tsx src/rundisplay.ts",
     "display:dry": "tsx src/rundisplay.ts --dry",
     "scheduler": "tsx scripts/scheduler.ts",
-    "kill": "tsx scripts/kill.ts"
+    "kill": "tsx scripts/kill.ts",
+    "health": "tsx scripts/health.ts"
   },
   "dependencies": {
     "dotenv": "16.4.7",
