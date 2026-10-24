@@ -246,7 +246,52 @@ export function deviceCriteria(campaignResourceName: string, excludedDevices: st
 }
 
 /** Ek mutate call. Resource name wapas karta hai. */
+/**
+ * Google ka asthayi error: ek hi cheez ko do request ek saath chhoo rahi thi.
+ * Google khud kehta hai "retry the request" — is haal me kuch bana nahi hota,
+ * isliye dobara bhejna surakshit hai.
+ */
+function isConcurrentModification(message: string): boolean {
+  return message.includes('CONCURRENT_MODIFICATION') || message.includes('INTERNAL_ERROR');
+}
+
+function wait(ms: number): Promise<void> {
+  return new Promise((resolve) => {
+    setTimeout(resolve, ms);
+  });
+}
+
 export async function mutateResource(
+  customerId: string,
+  resource: string,
+  operations: unknown[],
+  what: string,
+): Promise<string> {
+  const attempts = 3;
+  let lastError: unknown;
+
+  for (let attempt = 1; attempt <= attempts; attempt += 1) {
+    try {
+      return await mutateOnce(customerId, resource, operations, what);
+    } catch (error) {
+      lastError = error;
+      const message = error instanceof Error ? error.message : String(error);
+      if (!isConcurrentModification(message) || attempt === attempts) break;
+
+      const delay = 3000 * attempt;
+      logger.warn(
+        `${what} — Google abhi busy tha (try ${attempt}/${attempts}). ` +
+          `${delay / 1000}s baad dobara koshish...`,
+      );
+      await wait(delay);
+    }
+  }
+
+  throw lastError;
+}
+
+/** Ek mutate call — upar wala function iski koshish dobara karta hai. */
+async function mutateOnce(
   customerId: string,
   resource: string,
   operations: unknown[],
